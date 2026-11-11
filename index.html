@@ -1,0 +1,2914 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#17120F"><title>YOKO Roast Log</title><meta name="description" content="焙煎中の温度・ハゼ・火力を記録し、曲線・RoR・フェーズ比率と味から次回の焙煎を提案するアプリ"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style></head><body><style>
+:root{
+  --bg:#17120F; --surface:#211A16; --surface2:#2B231E; --line:#3B312B;
+  --text:#F3EDE6; --muted:#A99D92; --faint:#6E635A;
+  --copper:#E39B5B; --copperInk:#1B130E; --et:#E0605A; --target:#B9B0A6; --ror:#5FB8A9;
+  --crack:#E4675C; --yellow:#D9B44A; --finish:#8B96F2; --heat:#C792EA; --air:#9CB8D9;
+  --hot:#F08D6C; --cool:#7DB5E8; --ok:#9CCB8F;
+  --font: system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font)}
+body{font-size:16px;line-height:1.5}
+body.lock{overflow:hidden}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+button:disabled{opacity:.35;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--ror);outline-offset:2px}
+[hidden]{display:none !important}
+.view{max-width:520px;margin:0 auto}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- shared ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px}
+.field{display:flex;align-items:center;gap:10px}
+.field>span{width:5.2em;flex:none;color:var(--muted);font-size:14px}
+.field input,.field select,.field textarea{flex:1;min-width:0;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.field.col{align-items:flex-start}
+.field.col>span{padding-top:10px}
+select option{background:var(--surface);color:var(--text)}
+.seg{flex:1;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{padding:9px 0;font-size:15px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--text);color:var(--bg);font-weight:700}
+.btn{padding:12px 16px;border-radius:12px;font-weight:700}
+.btn.primary{background:var(--copper);color:var(--copperInk)}
+.btn.big{padding:15px;font-size:18px}
+.btn.ghost{border:1px solid var(--line);background:var(--surface2)}
+.btn.danger{border:1px solid var(--line);background:var(--surface2);color:var(--crack)}
+.btn.small{padding:8px 12px;font-size:14px}
+.row{display:flex;gap:8px}
+.row>.btn{flex:1;min-width:0}
+.row.three>.btn{padding:12px 4px;font-size:15px}
+.chip-btn{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:14px;white-space:nowrap}
+.link{color:var(--muted);font-size:14px;text-decoration:underline;padding:6px 0}
+.sub-head{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:14px;gap:10px}
+.title-in{width:100%;font:inherit;font-size:24px;font-weight:800;border:0;border-bottom:1.5px dashed var(--line);background:transparent;padding:10px 0 6px;margin:6px 0 4px;color:var(--text)}
+.sub-note{margin:0 0 10px;color:var(--muted);font-size:13px}
+.chart-wrap{position:relative}
+.chart-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* ---------- home ---------- */
+#home{padding:18px 16px 40px}
+.home-head h1{font-size:26px;font-weight:800;margin:6px 2px 14px}
+.notice{font-size:13px;color:var(--hot);margin:-6px 2px 12px;line-height:1.55}
+.resume{border:1.5px solid var(--yellow);border-radius:14px;padding:12px 14px;margin-bottom:14px;background:rgba(217,180,74,.08)}
+.resume p{margin:0 0 10px;font-weight:700}
+.setup{display:grid;gap:10px}
+.tabs{display:flex;gap:22px;margin:26px 2px 2px;border-bottom:1px solid var(--line)}
+.tabs button{padding:8px 0;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--text);border-color:var(--copper)}
+.list{list-style:none;margin:0;padding:0}
+.list li+li{border-top:1px solid var(--line)}
+.item{width:100%;text-align:left;display:grid;grid-template-columns:1fr auto;gap:0 12px;padding:12px 2px}
+.i-title{font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.i-num{text-align:right;font-weight:800;font-size:17px;font-variant-numeric:tabular-nums}
+.i-sub{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.i-sub.r{text-align:right}
+.i-sub.full{grid-column:1 / -1}
+.empty{color:var(--muted);font-size:14px;margin:12px 2px}
+#newProf{margin-top:8px;width:100%}
+.home-foot{margin-top:30px;display:flex;gap:12px;flex-wrap:wrap}
+.import-note{margin:8px 2px 0;color:var(--muted);font-size:12px}
+
+/* ---------- roast ---------- */
+#roast{height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;padding:0 0 8px}
+.r-top{display:flex;align-items:center;gap:8px;padding:8px 12px 0}
+.ops-chip{flex:1;min-width:0;padding:6px 10px;border-radius:999px;border:1px dashed var(--faint);font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.ops-chip .h{color:var(--heat);font-weight:700}
+.ops-chip .a{color:var(--air);font-weight:700}
+.r-main{display:flex;align-items:flex-end;justify-content:space-between;padding:0 14px;gap:10px}
+.timer{font-size:clamp(54px,16vw,74px);line-height:1;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.timer.idle{color:var(--faint)}
+.timer.mark{animation:mark .9s}
+@keyframes mark{0%{color:var(--copper)}100%{color:var(--text)}}
+.readout{text-align:right;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap}
+.rv{font-size:32px;font-weight:800;color:var(--copper)}
+.readout small{font-size:12px;margin-left:2px;color:var(--muted)}
+.sub-read{font-size:18px;font-weight:700}
+.sub-read .ror{font-size:23px;font-weight:800}
+.sub-read .et{color:var(--et);margin-right:10px}
+.sub-read .ror{color:var(--ror)}
+.sub-read .ror small{font-size:11px;font-weight:700;color:var(--muted)}
+.slotbar{height:4px;margin:0 14px;background:var(--surface2);border-radius:2px;overflow:hidden}
+#slotFill{height:100%;background:var(--faint);transform-origin:left;transform:scaleX(0)}
+.slotbar.soon #slotFill{background:var(--yellow)}
+.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 10px}
+.g-cell{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px 10px 6px;min-width:0;line-height:1.2;white-space:nowrap;overflow:hidden}
+.g-cell.wide{grid-column:span 2}
+.g-cell small{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-cell b{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.g-cell.name b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.7}
+.g-cell i{font-style:normal;font-size:12px;color:var(--muted);margin-left:2px}
+.g-cell em{font-style:normal;font-size:11px;font-weight:700;margin-left:4px}
+.g-cell.hot b,.g-cell.hot em{color:var(--hot)}
+.g-cell.cool b,.g-cell.cool em{color:var(--cool)}
+.g-cell.ok b{color:var(--ok)}
+.chart-wrap.live{flex:1 1 0;min-height:84px;margin:0 4px}
+.events{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 10px}
+.events .charge{grid-column:1/-1;background:var(--copper);color:var(--copperInk);border-radius:14px;padding:13px;font-size:18px;font-weight:800}
+.ev{--c:var(--crack);border:1.5px solid var(--c);color:var(--c);background:transparent;border-radius:12px;padding:4px 0;font-weight:700;font-size:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;min-height:44px;white-space:nowrap}
+.ev small{font-size:11px;font-variant-numeric:tabular-nums;font-weight:600}
+.ev-yellow{--c:var(--yellow)}
+.ev-drop{--c:var(--finish)}
+.ev.on{background:var(--c);color:var(--copperInk)}
+.ev.on:disabled{opacity:1}
+.entry{display:grid;grid-template-columns:60px 1fr 60px;gap:6px;padding:0 10px}
+.step{background:var(--surface2);border:1px solid var(--line);border-radius:14px;font-size:30px;font-weight:600;height:58px;user-select:none;-webkit-user-select:none}
+.step:active{background:var(--line)}
+.entry-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;gap:1px}
+.slot-lbl{font-size:12px;color:var(--muted);white-space:nowrap;line-height:1.2}
+.fields{display:flex;gap:6px;width:100%;justify-content:center}
+.fld{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1.5px solid transparent;border-radius:10px;padding:0 2px;line-height:1.05}
+.fld small{display:none;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--copper)}
+.fld span{font-size:36px;font-weight:800;font-variant-numeric:tabular-nums}
+.fields:not(.dual) .fld span::after{content:'℃';font-size:14px;font-weight:600;color:var(--muted);margin-left:2px}
+.fields.dual .fld{border-color:var(--line)}
+.fields.dual .fld small{display:block}
+.fields.dual .fld span{font-size:26px}
+.fields.dual .fld.et small{color:var(--et)}
+.fields.dual .fld.active{border-color:var(--text);background:var(--surface)}
+.fld.pre span{color:var(--muted)}
+.fld.blank span{color:var(--faint)}
+.pad{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 10px}
+.pad button{background:var(--surface);border:1px solid var(--line);border-radius:14px;font-size:27px;font-weight:700;height:clamp(44px,7.6vh,60px);font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none}
+.pad button:active{background:var(--surface2)}
+.pad .fn{font-size:22px;color:var(--muted)}
+.pad .rec{grid-column:4;grid-row:2 / 5;height:auto;background:var(--copper);color:var(--copperInk);border-color:var(--copper);font-size:21px;font-weight:800}
+.pad .rec:active{background:#C9844A}
+.pad .zero{grid-column:1 / 3;grid-row:4}
+.pad .dot{grid-column:3;grid-row:4}
+.pad.locked .rec{opacity:.35}
+
+/* ---------- ops sheet ---------- */
+.op-group{margin:4px 0 14px}
+.op-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.op-head b{font-size:15px}
+.op-head span{font-size:13px;color:var(--muted)}
+.op-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.op-grid button{padding:11px 0;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-weight:700;font-size:17px;font-variant-numeric:tabular-nums}
+.op-grid button.on{background:var(--c);color:var(--copperInk);border-color:var(--c)}
+
+/* ---------- result ---------- */
+#result,#profile{padding:12px 16px 40px}
+.chart-wrap.res{height:300px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.chart-wrap.prof{height:210px;background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-top:6px}
+.legend{display:flex;gap:6px 14px;font-size:12px;color:var(--muted);margin:8px 2px 0;flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;height:0;border-top:3px solid var(--c);vertical-align:middle;margin-right:5px}
+.legend i.dash{border-top-style:dashed}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 8px;margin:16px 2px 14px}
+.stats div{min-width:0}
+.stats dt{font-size:12px;color:var(--muted)}
+.stats dd{margin:0;font-weight:800;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.25}
+.stats dd small{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.phases{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:14px;font-variant-numeric:tabular-nums}
+.phases th{font-size:12px;color:var(--muted);font-weight:600;text-align:right;padding:4px 2px;border-bottom:1px solid var(--line)}
+.phases th:first-child,.phases td:first-child{text-align:left}
+.phases td{text-align:right;padding:7px 2px;border-bottom:1px solid var(--line)}
+.phases i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;background:var(--c)}
+.form{display:grid;gap:10px}
+.props{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.props label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
+.props input{width:100%;min-width:0;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.stars{display:flex;gap:2px}
+.stars button{font-size:28px;line-height:1;color:var(--faint);padding:2px 3px}
+.stars button.on{color:var(--yellow)}
+.actions{display:grid;gap:8px;margin-top:16px}
+.save-state{font-size:13px;color:var(--muted);margin:8px 2px 0}
+#backRoast{justify-self:start}
+
+/* ---------- profile editor ---------- */
+.prof-rows{list-style:none;padding:0;margin:12px 0 10px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 12px}
+.prof-rows li{display:grid;grid-template-columns:3.3em 1fr auto auto;align-items:center;gap:4px}
+.pr-t{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.prof-rows input{width:100%;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-variant-numeric:tabular-nums;text-align:right}
+.pr-u{font-size:12px;color:var(--muted)}
+.pr-x{color:var(--faint);font-size:18px;padding:4px 6px}
+.shift{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 0}
+.shift span{font-size:13px;color:var(--muted)}
+.shift b{margin-left:6px;color:var(--copper)}
+.shift-btns{display:grid;grid-template-columns:repeat(4,46px);gap:6px}
+.shift-btns button{padding:8px 0;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-weight:700;font-variant-numeric:tabular-nums}
+#profEvents{margin:8px 2px 0}
+
+/* ---------- modal / toast ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet{background:var(--surface);border:1px solid var(--line);border-bottom:0;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h3{margin:0 0 6px;font-size:18px}
+.sheet p{margin:0 0 12px;color:var(--muted);font-size:14px}
+.sheet textarea{width:100%;height:180px;font:13px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--text)}
+.sheet img{width:100%;border-radius:10px;display:block}
+.sheet a{color:var(--ror);font-weight:700}
+.sheet .row{margin-top:14px}
+.modal-in{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.toast{position:fixed;left:50%;width:max-content;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);font-weight:600;padding:10px 16px;border-radius:999px;font-size:14px;z-index:20;max-width:90vw;text-align:center}
+body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
+@media (prefers-reduced-motion:reduce){.timer.mark{animation:none}}
+/* ---------- v7 additions ---------- */
+.bean-row{display:flex;gap:8px;padding:0 12px}
+.bean-chip{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:14px;text-align:left}
+.bean-chip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.bean-chip span{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.bean-chip .pen{margin-left:auto;color:var(--copper);font-size:12px;font-weight:700;flex:none}
+.bean-row .chip-btn{flex:none}
+.warn{font-size:13px;color:var(--hot);margin:0 0 12px;line-height:1.55}
+.sec{margin:20px 0 0;display:grid;gap:8px}
+.sec-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sec-head b{font-size:15px}
+.taste-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.taste-item{width:100%;text-align:left;display:grid;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.taste-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.taste-top b{color:var(--text);font-size:15px}
+.taste-tags{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px;font-variant-numeric:tabular-nums}
+.taste-tags span{white-space:nowrap}
+.taste-tags span.hi{color:var(--hot);font-weight:700}
+.taste-note{font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.score-row{display:grid;grid-template-columns:4.2em 1fr;align-items:center;gap:8px;margin:0 0 8px}
+.score-row>span{font-size:14px;color:var(--muted)}
+.score-seg{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.score-seg button{padding:8px 0;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.score-seg button+button{border-left:1px solid var(--line)}
+.score-seg button.on{background:var(--copper);color:var(--copperInk)}
+.edit-grid{display:grid;grid-template-columns:5.5em 1fr;gap:8px 10px;align-items:center}
+.edit-grid span{font-size:14px;color:var(--muted)}
+.edit-grid input{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-variant-numeric:tabular-nums}
+.pt-rows{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:6px}
+.pt-rows li{display:grid;grid-template-columns:5.2em 1fr 1fr auto;gap:6px;align-items:center}
+.pt-rows.no-et li{grid-template-columns:5.2em 1fr auto}
+.pt-rows input.pt-t{text-align:center}
+.pt-rows input{width:100%;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-variant-numeric:tabular-nums;text-align:right}
+.pt-rows .pt-head{font-size:12px;color:var(--muted)}
+.sheet .field{margin:0 0 10px}
+.sheet textarea.note-in{height:84px;font:inherit}
+/* ---------- v8: goals / onboarding ---------- */
+#onboard{padding:16px 16px 40px}
+.ob-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ob-steps{display:flex;gap:6px}
+.ob-steps i{width:24px;height:4px;border-radius:2px;background:var(--line)}
+.ob-steps i.on{background:var(--copper)}
+#onboard h2{font-size:23px;font-weight:800;margin:18px 0 6px;text-wrap:balance;line-height:1.35}
+.ob-lead{color:var(--muted);font-size:14px;margin:0 0 10px;line-height:1.65}
+.ob-q{font-size:14px;font-weight:700;margin:20px 0 8px}
+.ob-q small{color:var(--muted);font-weight:500;margin-left:6px}
+.choices{display:grid;gap:8px}
+.choices.two{grid-template-columns:1fr 1fr}
+.choice{display:grid;gap:3px;align-content:start;text-align:left;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);min-width:0}
+.choice b{font-size:16px}
+.choice span{font-size:13px;color:var(--muted);line-height:1.5}
+.choice.on{border-color:var(--copper);background:rgba(227,155,91,.10)}
+.choice.on b{color:var(--copper)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-size:15px}
+.chip.on{border-color:var(--copper);color:var(--copper);background:rgba(227,155,91,.10);font-weight:700}
+.chip.avoid.on{border-color:var(--crack);color:var(--crack);background:rgba(228,103,92,.10)}
+.ob-nav{display:flex;gap:8px;margin-top:26px}
+.ob-nav .btn{flex:1}
+.ob-sum{display:grid;margin-top:6px}
+.ob-sum div{display:flex;justify-content:space-between;gap:12px;font-size:15px;border-bottom:1px solid var(--line);padding:10px 0}
+.ob-sum span{color:var(--muted)}
+.ob-sum b{text-align:right;font-variant-numeric:tabular-nums}
+.ob-note{font-size:13px;color:var(--muted);line-height:1.6;margin:12px 0 0}
+.ob-ai{margin-top:18px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}
+.ob-ai summary{cursor:pointer;font-weight:700;font-size:14px}
+.ob-ai .field{margin-top:10px}
+.goal-card{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:-4px 0 14px;padding:10px 14px}
+.goal-card p{margin:0;font-size:13px;color:var(--muted);line-height:1.55;min-width:0}
+.goal-card p b{color:var(--text);font-size:14px}
+/* ---------- v8: diagnosis ---------- */
+.diag{display:grid;gap:12px}
+.meters{display:grid;gap:9px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.mrow{display:grid;grid-template-columns:5.6em 1fr 4.4em;gap:10px;align-items:center;font-size:13px}
+.mrow>span{color:var(--muted)}
+.mrow>b{text-align:right;font-variant-numeric:tabular-nums;font-size:14px}
+.mrow>b.out{color:var(--hot)}
+.mbar{position:relative;height:8px;border-radius:4px;background:var(--surface2)}
+.mbar .band{position:absolute;top:0;bottom:0;background:rgba(156,203,143,.38);border-radius:4px}
+.mbar .dot{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;transform:translate(-50%,-50%);background:var(--copper);border:2px solid var(--surface)}
+.mbar .dot.out{background:var(--hot)}
+.meters small{color:var(--faint);font-size:12px}
+.plan{border:1.5px solid var(--copper);border-radius:14px;padding:12px 14px;background:rgba(227,155,91,.07)}
+.plan h4{margin:0 0 8px;font-size:15px;color:var(--copper)}
+.plan ol{margin:0;padding-left:1.3em;display:grid;gap:6px;font-size:14px;line-height:1.6}
+.plan p{margin:8px 0 0;font-size:13px;color:var(--muted);line-height:1.6}
+.finds{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.finds li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline;font-size:14px;line-height:1.55}
+.finds .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;grid-row:span 2}
+.finds li.warn{color:var(--text);font-size:14px;margin:0;line-height:1.55}
+.finds-more summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}
+.finds-more .finds{margin-top:8px}
+.plan p.next{color:var(--text)}
+.finds li.warn .tag{background:rgba(240,141,108,.16);color:var(--hot)}
+.finds li.ok .tag{background:rgba(156,203,143,.16);color:var(--ok)}
+.finds li.info .tag{background:rgba(125,181,232,.14);color:var(--cool)}
+.finds .d{color:var(--muted);font-size:13px}
+.ai-box{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface);display:grid;gap:10px}
+.ai-box h4{margin:0;font-size:15px}
+.ai-out{font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai-meta{font-size:12px;color:var(--faint)}
+.ai-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ai-actions .btn{flex:1;min-width:9em}
+
+
+
+/* ---------- PWA / Bluetooth ---------- */
+.install-card{margin-bottom:12px;border:1.5px solid var(--ror);background:rgba(95,184,169,.08)}
+.install-card .install-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.install-card b{font-size:16px}
+.install-card p{margin:5px 0 10px;color:var(--muted);font-size:13px}
+.device-card{margin-top:12px;display:grid;gap:10px}
+.device-status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;min-width:0}
+.device-dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none}
+.device-dot.on{background:var(--ror);box-shadow:0 0 10px rgba(95,184,169,.55)}
+.device-temp{font-size:22px;font-weight:800;color:var(--copper);font-variant-numeric:tabular-nums}
+.device-note{font-size:12px;color:var(--muted);line-height:1.5;margin:0}
+.ble-fields{display:grid;gap:9px}
+.ble-fields label{display:grid;gap:4px;color:var(--muted);font-size:12px}
+.ble-fields input,.ble-fields select{width:100%;font:inherit;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.ble-check{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;gap:8px!important}
+.ble-check input{width:auto!important}
+#bleRoastChip.connected{border-color:var(--ror);color:var(--ror)}
+</style>
+<main>
+  <!-- ================= HOME ================= -->
+  <section id="home" class="view">
+    <header class="home-head"><h1>YOKO Roast Log <small style="font-size:13px;color:var(--muted);font-weight:600">v8</small></h1></header>
+    <p id="memNotice" class="notice" hidden></p>
+    <div id="goalCard" class="card goal-card"><p id="goalTxt"></p><button id="goalBtn" class="chip-btn">好み・機材</button></div>
+    <div id="installCard" class="card install-card" hidden>
+      <div class="install-head"><b>ホーム画面にアプリとして追加</b><button id="installBtn" class="btn primary small">インストール</button></div>
+      <p>インストール後はホーム画面・アプリ一覧から起動でき、オフラインでも焙煎ログを使えます。</p>
+    </div>
+    <div id="resume" class="resume" hidden>
+      <p id="resumeTxt"></p>
+      <div class="row"><button id="resumeBtn" class="btn primary">続きを開く</button><button id="discardBtn" class="btn ghost">破棄</button></div>
+    </div>
+    <div class="card setup">
+      <label class="field"><span>豆</span><input id="beanIn" placeholder="例：アリーチャ" autocomplete="off"></label>
+      <label class="field"><span>生豆</span><input id="greenIn" inputmode="decimal" placeholder="g"></label>
+      <label class="field"><span>焙煎機</span><input id="machineIn" placeholder="例：直火ドラム500g・豆に直接" autocomplete="off"></label>
+      <label class="field"><span>ターゲット</span><select id="profSel"></select></label>
+      <div class="field"><span>記録間隔</span><div class="seg" id="intSeg"><button data-v="30">30秒</button><button data-v="45">45秒</button><button data-v="60">1分</button></div></div>
+      <div class="field"><span>記録の時刻</span><div class="seg" id="timeSeg"><button data-v="free">押した時刻</button><button data-v="slot">間隔ごと</button></div></div>
+      <div class="field"><span>記録温度</span><div class="seg" id="chSeg"><button data-v="bt">BTのみ</button><button data-v="bt+et">BT＋ET</button></div></div>
+      <div class="field"><span>RoR幅</span><div class="seg" id="rorSeg"><button data-v="30">30秒</button><button data-v="60">60秒</button><button data-v="90">90秒</button></div></div>
+      <div class="field"><span>音</span><div class="seg" id="soundSeg"><button data-v="1">あり</button><button data-v="0">なし</button></div><button id="testSound" class="btn ghost small">試す</button></div>
+      <button id="goRoast" class="btn primary big">記録画面へ</button>
+    </div>
+    <div class="card device-card">
+      <div class="sub-head"><b style="color:var(--text)">Bluetooth温度計</b><span id="bleSupport">確認中</span></div>
+      <div class="device-status"><span id="bleDot" class="device-dot"></span><span id="bleState">未接続</span><span id="bleTemp" class="device-temp"></span></div>
+      <div class="row"><button id="bleConnectBtn" class="btn ghost">BLE温度計に接続</button><button id="bleCfgBtn" class="btn ghost">設定</button></div>
+      <p class="device-note">BLE機器ならPixelのChromeから直接読める可能性があります。機器固有のService UUID / Characteristic UUIDが分かれば自動記録できます。claude.ai上ではBluetoothが使えない場合があります。</p>
+    </div>
+    <div id="tabs" class="tabs" role="tablist">
+      <button data-tab="roasts" role="tab">焙煎の記録</button>
+      <button data-tab="profiles" role="tab">ターゲット</button>
+    </div>
+    <div id="tabRoasts">
+      <ul id="roastList" class="list"></ul>
+      <p id="roastEmpty" class="empty">読み込み中…</p>
+    </div>
+    <div id="tabProfiles" hidden>
+      <ul id="profList" class="list"></ul>
+      <p id="profEmpty" class="empty"></p>
+      <button id="newProf" class="btn ghost">ターゲットを手入力で作る</button>
+      <button id="importProfBtn" class="btn ghost" style="width:100%;margin-top:8px">過去CSVをターゲットに読み込む</button>
+      <input id="importProfFile" type="file" accept=".csv,text/csv" hidden>
+      <p class="import-note">このアプリのCSV、YOKO Roast MiniのCSVの両方を読み込めます。</p>
+    </div>
+    <footer class="home-foot">
+      <button id="importLogBtn" class="link">CSVを焙煎記録として読み込む</button>
+      <button id="backupBtn" class="link">バックアップを書き出す</button>
+      <button id="restoreFileBtn" class="link">バックアップをファイルから読み込む</button>
+      <button id="restoreBtn" class="link">バックアップを貼り付けで読み込む</button>
+      <input id="importLogFile" type="file" accept=".csv,.txt,text/csv,text/plain" multiple hidden>
+      <input id="restoreFile" type="file" accept=".json,application/json,text/plain" hidden>
+    </footer>
+  </section>
+
+  <!-- ================= ONBOARDING / GOALS ================= -->
+  <section id="onboard" class="view" hidden>
+    <div class="ob-top"><div id="obSteps" class="ob-steps" aria-hidden="true"></div><button id="obSkip" class="link">あとで設定する</button></div>
+    <div id="obBody"></div>
+    <div class="ob-nav"><button id="obPrev" class="btn ghost">戻る</button><button id="obNext" class="btn primary">次へ</button></div>
+  </section>
+
+  <!-- ================= ROAST ================= -->
+  <section id="roast" class="view" hidden>
+    <div class="r-top">
+      <button id="quitBtn" class="chip-btn">戻る</button>
+      <button id="opsBtn" class="ops-chip"></button>
+      <button id="bleRoastChip" class="chip-btn" hidden>BLE</button>
+      <button id="undoBtn" class="chip-btn">取り消し</button>
+    </div>
+    <div class="bean-row">
+      <button id="beanChip" class="bean-chip"><b id="beanChipName"></b><span id="beanChipSub"></span><span class="pen">編集</span></button>
+      <button id="ptEditChip" class="chip-btn">記録点</button>
+    </div>
+    <div class="r-main">
+      <div id="timer" class="timer idle">00:00</div>
+      <div class="readout">
+        <div><span id="lastBT" class="rv">---</span><small>℃</small></div>
+        <div class="sub-read"><span id="lastET" class="et" hidden></span><span class="ror"><small>RoR </small><span id="lastRoR">--</span><small> ℃/分</small></span></div>
+      </div>
+    </div>
+    <div id="slotbar" class="slotbar"><div id="slotFill"></div></div>
+    <div id="guide" class="guide"></div>
+    <div class="chart-wrap live"><canvas id="liveChart" aria-label="温度の推移"></canvas></div>
+    <div id="events" class="events"></div>
+    <div class="entry">
+      <button id="minusBtn" class="step" aria-label="1℃下げる">−</button>
+      <div class="entry-mid">
+        <span id="slotLbl" class="slot-lbl"></span>
+        <div id="fields" class="fields"></div>
+      </div>
+      <button id="plusBtn" class="step" aria-label="1℃上げる">＋</button>
+    </div>
+    <div id="pad" class="pad">
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button data-k="del" class="fn" aria-label="1文字消す">⌫</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="rec" id="recKey" class="rec">記録</button>
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="0" class="zero">0</button><button data-k="." class="dot">.</button>
+    </div>
+  </section>
+
+  <!-- ================= RESULT ================= -->
+  <section id="result" class="view" hidden>
+    <header class="sub-head"><button id="resBack" class="chip-btn">一覧へ</button><span id="resDate" class="num"></span></header>
+    <input id="resBean" class="title-in" placeholder="豆の名前" autocomplete="off">
+    <p id="resProf" class="sub-note"></p>
+    <p id="resWarn" class="warn" hidden></p>
+    <div class="chart-wrap res"><canvas id="resChart" aria-label="焙煎グラフ"></canvas></div>
+    <div id="legend" class="legend"></div>
+    <dl id="stats" class="stats"></dl>
+    <table id="phases" class="phases"></table>
+    <div class="form">
+      <label class="field"><span>生豆</span><input id="resGreen" inputmode="decimal" placeholder="g"></label>
+      <label class="field"><span>焙煎後</span><input id="resRoasted" inputmode="decimal" placeholder="g"></label>
+      <label class="field"><span>焙煎機</span><input id="resMachine" placeholder="例：直火ドラム500g・豆に直接" autocomplete="off"></label>
+      <div class="props">
+        <label>生豆の水分 %<input id="resMoist" inputmode="decimal" placeholder="例 10.2"></label>
+        <label>生豆の密度 g/L<input id="resDensity" inputmode="decimal" placeholder="例 860"></label>
+        <label>焙煎度（色値）<input id="resColor" inputmode="decimal" placeholder="例 75"></label>
+      </div>
+      <div class="field"><span>評価</span><div id="stars" class="stars" aria-label="評価"></div></div>
+      <label class="field col"><span>メモ</span><textarea id="resNote" rows="3" placeholder="味、次回の調整など"></textarea></label>
+    </div>
+    <section class="sec" aria-label="味の記録">
+      <div class="sec-head"><b>味の記録</b><button id="addTaste" class="btn ghost small">＋ 記録する</button></div>
+      <ul id="tasteList" class="taste-list"></ul>
+      <p id="tasteEmpty" class="empty">焙煎後の日数ごとに、苦み・渋み・酸・甘さ・果実感を残せます。</p>
+    </section>
+    <section class="sec" aria-label="診断と次回の提案">
+      <div class="sec-head"><b>診断と次回の提案</b><button id="diagGoalBtn" class="link">目標を変える</button></div>
+      <p id="diagGoal" class="sub-note"></p>
+      <div id="diag" class="diag"></div>
+    </section>
+    <p id="saveState" class="save-state">変更は自動で保存されます</p>
+    <div class="actions">
+      <div class="row three"><button id="imgBtn" class="btn ghost">グラフ画像</button><button id="csvBtn" class="btn ghost">CSV</button><button id="artisanBtn" class="btn ghost">Artisan用</button></div>
+      <div class="row"><button id="editEvBtn" class="btn ghost">イベント時刻を修正</button><button id="editPtBtn" class="btn ghost">記録点を修正</button></div>
+      <button id="toProfBtn" class="btn primary">この焙煎をターゲットに登録</button>
+      <div class="row"><button id="newRoastBtn" class="btn ghost">新しい焙煎へ</button><button id="delBtn" class="btn danger">削除</button></div>
+      <button id="backRoast" class="link">排出を取り消して記録に戻る</button>
+    </div>
+  </section>
+
+  <!-- ================= PROFILE EDITOR ================= -->
+  <section id="profile" class="view" hidden>
+    <header class="sub-head"><button id="profBack" class="chip-btn">戻る</button><span id="profMeta"></span></header>
+    <input id="profName" class="title-in" placeholder="ターゲットの名前" autocomplete="off">
+    <div class="chart-wrap prof"><canvas id="profChart" aria-label="ターゲットのグラフ"></canvas></div>
+    <p id="profEvents" class="sub-note num" hidden></p>
+    <div class="shift">
+      <span>温度をまとめてずらす<b id="shiftSum" class="num"></b></span>
+      <div id="shiftBtns" class="shift-btns"><button data-d="-5">−5</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="5">+5</button></div>
+    </div>
+    <ol id="profRows" class="prof-rows"></ol>
+    <button id="addRow" class="btn ghost" style="width:100%">1分追加</button>
+    <div class="actions">
+      <button id="profSave" class="btn primary big">保存</button>
+      <button id="profDel" class="btn danger">このターゲットを削除</button>
+    </div>
+  </section>
+</main>
+
+<div id="modal" class="modal" hidden><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const KEY = { roasts:'roastlog:roasts', profiles:'roastlog:profiles', draft:'roastlog:draft', prefs:'roastlog:prefs' };
+const FONT = 'system-ui, -apple-system, "Noto Sans JP", "Hiragino Sans", sans-serif';
+const EVENTS = [
+  { k:'yellow', label:'イエロー', ak:'DRY End' },
+  { k:'fc', label:'1ハゼ', ak:'FCs' },
+  { k:'fce', label:'1ハゼ終', ak:'FCe' },
+  { k:'sc', label:'2ハゼ', ak:'SCs' },
+  { k:'drop', label:'排出', ak:'DROP' },
+];
+const OPS = [ { k:'heat', label:'火力' }, { k:'air', label:'風量' } ];
+const DARK = {
+  bg:null, text:'#F3EDE6', muted:'#A99D92', grid:'rgba(243,237,230,.08)', now:'rgba(243,237,230,.35)',
+  actual:'#E39B5B', et:'#E0605A', target:'rgba(185,176,166,.8)', ror:'#5FB8A9',
+  yellow:'#D9B44A', crack:'#E4675C', finish:'#8B96F2', heat:'#C792EA', air:'#9CB8D9',
+  phDry:'#6FA96A', phMai:'#C9A24A', phDev:'#C8674F', annBg:'rgba(33,26,22,.94)', annText:'#F3EDE6',
+};
+const LIGHT = {
+  bg:'#FFFFFF', text:'#222222', muted:'#6B6B6B', grid:'rgba(0,0,0,.08)', now:'rgba(0,0,0,.3)',
+  actual:'#8B4513', et:'#C0392B', target:'#9A9A9A', ror:'#2F8C7E',
+  yellow:'#B08A1E', crack:'#D0453A', finish:'#4F5BD5', heat:'#8E44AD', air:'#5D7FA3',
+  phDry:'#7BB274', phMai:'#D8B45A', phDev:'#D17A63', annBg:'rgba(255,255,255,.95)', annText:'#222222',
+};
+const PRESETS = [
+  { id:'p-cyant-eth-honey-light', name:'エチオピアハニー 浅煎り', note:'CYANTの焙煎ログから作成',
+    points:[[60,93.9],[90,112.9],[120,127.7],[150,139.6],[180,149.3],[210,157.3],[240,164.8],[270,171.3],[300,176.9],[330,182.1],[360,187.2],[390,191.5],[420,195.0],[435,196.8],[450,198.2],[474,200.4]].map(([t, bt]) => ({ t, bt })),
+    ev:{ yellow:239, fc:435, fce:null, sc:null, drop:474 } },
+  { id:'p-cyant-eth-honey-medium', name:'エチオピアハニー 中煎り', note:'浅煎りをもとに設計した試案',
+    points:[[60,93.9],[90,112.9],[120,127.7],[150,139.6],[180,149.3],[210,157.3],[240,164.8],[270,171.0],[300,176.3],[330,181.1],[360,185.7],[390,189.7],[420,193.3],[450,196.8],[480,199.8],[510,202.4],[540,204.7],[555,205.7]].map(([t, bt]) => ({ t, bt })),
+    ev:{ yellow:239, fc:450, fce:null, sc:null, drop:555 } },
+];
+const PRESET_FLAG = 'seedCyantEthHoney';
+const SAMPLE = [[0,180],[60,100],[120,106],[180,118],[240,130],[300,141],[360,151],[420,160],[480,168],[540,176],[600,184],[660,191],[720,198],[780,204]];
+const blankEv = () => ({ yellow:null, fc:null, fce:null, sc:null, drop:null });
+
+/* ================= storage ================= */
+const inClaude = !!(window.storage && typeof window.storage.set === 'function');
+const store = (() => {
+  let persistent = false, mode = 'mem';
+  const mem = {};
+  const localOK = () => {
+    try{ const k='roastlog:local-probe'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; }
+  };
+  return {
+    get persistent(){ return persistent; },
+    get mode(){ return mode; },
+    async init(){
+      if(inClaude){
+        try{ const r = await window.storage.set('roastlog:probe', String(Date.now()), false); if(r){ persistent = true; mode='cloud'; return true; } }catch(e){}
+      }
+      if(localOK()){ persistent = true; mode='local'; return true; }
+      persistent = false; mode='mem'; return false;
+    },
+    async get(k){
+      if(mode === 'cloud') try{ const r = await window.storage.get(k, false); return r ? r.value : null; }catch(e){}
+      if(mode === 'local') try{ return localStorage.getItem(k); }catch(e){}
+      return k in mem ? mem[k] : null;
+    },
+    async set(k, v){
+      if(mode === 'cloud') try{ const r = await window.storage.set(k, v, false); return !!r; }catch(e){}
+      if(mode === 'local') try{ localStorage.setItem(k, v); return true; }catch(e){}
+      mem[k] = v; return true;
+    },
+    async del(k){
+      if(mode === 'cloud') try{ await window.storage.delete(k, false); return true; }catch(e){}
+      if(mode === 'local') try{ localStorage.removeItem(k); return true; }catch(e){}
+      delete mem[k]; return true;
+    },
+  };
+})();
+const safeParse = (s, d) => { try{ return s ? JSON.parse(s) : d; }catch(e){ return d; } };
+
+/* ================= state ================= */
+let roasts = [], profiles = [], draft = null, cur = null;
+let prefs = { interval:60, sound:true, profileId:'', channels:'bt', machine:'', rorWin:30, timeMode:'free', ble:{ service:'', characteristic:'', parser:'text', auto:false, every:2 } };
+let inp = null;
+let ticker = null, lastPre = -1, lastMark = -1, lastDrawSec = -1, audioCtx = null, wakeLock = null;
+let homeTab = 'roasts', editProf = null, profIsNew = false, profDirty = false, profShift = 0, justFinishedId = null;
+let installPromptEvent = null;
+let ble = { device:null, server:null, characteristic:null, temp:null, raw:'', connected:false, lastAutoT:-999, lastSaveMs:0 };
+
+
+/* ================= helpers ================= */
+const clone = o => JSON.parse(JSON.stringify(o));
+const r1 = v => Math.round(v * 10) / 10;
+const fmt = s => { if(s == null || !isFinite(s)) return '--:--'; s = Math.max(0, Math.floor(s + 1e-6)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const fmtT = v => String(r1(v));
+const signed = v => { const a = r1(Math.abs(v)); return (a === 0 ? '±' : v > 0 ? '+' : '−') + a; };
+const num = v => { const n = parseFloat(v); return isNaN(n) || n <= 0 ? null : n; };
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const vib = p => { try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} };
+const sortPts = pts => (pts || []).filter(p => p && isFinite(p.t) && isFinite(p.bt)).map(p => ({ t:p.t, bt:p.bt })).sort((a, b) => a.t - b.t);
+const elapsed = () => cur && cur.t0 ? (Date.now() - cur.t0) / 1000 : 0;
+const validTemp = v => v != null && isFinite(v) && v >= 0 && v <= 400;
+const evColor = (T, k) => k === 'drop' ? T.finish : k === 'yellow' ? T.yellow : T.crack;
+const opList = (r, k) => (r.ops || []).filter(o => o.type === k).sort((a, b) => a.t - b.t);
+const opNow = (r, k) => { const l = opList(r, k); return l.length ? l[l.length - 1].v : null; };
+function dateLabel(iso){
+  const d = new Date(iso), now = new Date();
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  return (d.getFullYear() !== now.getFullYear() ? d.getFullYear() + '/' : '') + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+}
+function dateFull(iso){
+  const d = new Date(iso), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+let toastTimer = null;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600); }
+function interp(p, t){
+  if(!p.length || t == null) return null;
+  if(t <= p[0].t) return p[0].bt;
+  if(t >= p[p.length - 1].t) return p[p.length - 1].bt;
+  for(let i = 1; i < p.length; i++){
+    if(t <= p[i].t){ const a = p[i - 1], b = p[i]; return b.t === a.t ? b.bt : a.bt + (b.bt - a.bt) * (t - a.t) / (b.t - a.t); }
+  }
+  return null;
+}
+function interpStrict(p, t){
+  if(!p.length || t == null || t < p[0].t - 0.5 || t > p[p.length - 1].t + 0.5) return null;
+  return interp(p, t);
+}
+function tgtAt(tg, t){
+  if(!tg || t == null) return null;
+  const p = sortPts(tg.points);
+  if(!p.length || t < p[0].t - 1e-6 || t > p[p.length - 1].t + 1e-6) return null;
+  return interp(p, t);
+}
+function normRoast(r){
+  r.ev = Object.assign(blankEv(), r.ev || {});
+  r.points = Array.isArray(r.points) ? r.points : [];
+  r.ops = Array.isArray(r.ops) ? r.ops : [];
+  r.undo = Array.isArray(r.undo) ? r.undo : [];
+  r.channels = r.channels === 'bt+et' ? 'bt+et' : 'bt';
+  r.interval = [30,45,60].includes(r.interval) ? r.interval : prefs.interval;
+  r.target = r.target || null;
+  r.tastings = Array.isArray(r.tastings) ? r.tastings : [];
+  r.machine = typeof r.machine === 'string' ? r.machine : '';
+  return r;
+}
+const persistRoasts = () => store.set(KEY.roasts, JSON.stringify(roasts));
+const persistProfiles = () => store.set(KEY.profiles, JSON.stringify(profiles));
+const rorGap = () => Math.max(20, (Number(prefs.rorWin) || 30) - 5);
+const savePrefs = () => store.set(KEY.prefs, JSON.stringify(prefs));
+async function saveDraft(){ if(!cur) return; draft = clone(cur); await store.set(KEY.draft, JSON.stringify(cur)); }
+function upsertRoast(r){ r.updated = new Date().toISOString(); const i = roasts.findIndex(x => x.id === r.id); if(i >= 0) roasts[i] = r; else roasts.push(r); }
+
+/* ================= analysis ================= */
+function rorOf(p, afterT){
+  const out = [];
+  for(let i = 1; i < p.length; i++){
+    let j = -1;
+    for(let k = i - 1; k >= 0; k--){ if(p[i].t - p[k].t >= rorGap()){ j = k; break; } }
+    if(j < 0) continue;
+    if(afterT != null && p[i].t <= afterT) continue;
+    out.push({ t:p[i].t, v:(p[i].bt - p[j].bt) / (p[i].t - p[j].t) * 60 });
+  }
+  return out;
+}
+function analyze(r){
+  const p = sortPts(r.points);
+  const pe = (r.points || []).filter(q => q && isFinite(q.t) && isFinite(q.et)).map(q => ({ t:q.t, bt:q.et })).sort((a, b) => a.t - b.t);
+  let tp = null;
+  if(p.length >= 3){
+    let mi = 0; p.forEach((x, i) => { if(x.bt < p[mi].bt) mi = i; });
+    if(mi > 0 && mi < p.length - 1) tp = p[mi];
+  }
+  const ror = rorOf(p, tp ? tp.t : null);
+  const rorPts = ror.map(x => ({ t:x.t, bt:x.v }));
+  const e = r.ev || {};
+  const btAt = t => interpStrict(p, t);
+  const etAt = t => interpStrict(pe, t);
+  const rorAt = t => interpStrict(rorPts, t);
+  const c0 = (r.points || []).find(q => q && Math.abs(q.t) < 0.5);
+  const chargeBT = c0 && isFinite(c0.bt) ? c0.bt : null;
+  const chargeET = c0 && isFinite(c0.et) ? c0.et : null;
+  const devT = e.fc != null && e.drop != null ? e.drop - e.fc : null;
+  const dtr = devT != null && e.drop > 0 ? devT / e.drop * 100 : null;
+  const dropBT = e.drop != null ? btAt(e.drop) : null;
+  const fcBT = e.fc != null ? btAt(e.fc) : null;
+  const devRise = dropBT != null && fcBT != null ? dropBT - fcBT : null;
+  const rorFc = e.fc != null ? rorAt(e.fc) : null;
+  const g = num(r.green), ro = num(r.roasted);
+  const loss = g && ro ? (g - ro) / g * 100 : null;
+  let diff = null;
+  if(r.target){
+    const ds = p.filter(q => q.t > 0).map(q => { const tv = tgtAt(r.target, q.t); return tv == null ? null : q.bt - tv; }).filter(v => v != null);
+    if(ds.length) diff = { mae:ds.reduce((a, b) => a + Math.abs(b), 0) / ds.length, worst:ds.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0) };
+  }
+  const rate = (a, b) => a && b && b.t > a.t ? (b.v - a.v) / ((b.t - a.t) / 60) : null;
+  const ptAt = t => { const v = btAt(t); return v == null ? null : { t, v }; };
+  const phases = [];
+  if(e.yellow != null){
+    phases.push({ k:'dry', name:'ドライ', dur:e.yellow, avg:rate(tp ? { t:tp.t, v:tp.bt } : null, ptAt(e.yellow)) });
+    if(e.fc != null) phases.push({ k:'mai', name:'メイラード', dur:e.fc - e.yellow, avg:rate(ptAt(e.yellow), ptAt(e.fc)) });
+  }
+  if(e.fc != null && e.drop != null) phases.push({ k:'dev', name:'発達', dur:e.drop - e.fc, avg:rate(ptAt(e.fc), ptAt(e.drop)) });
+  phases.forEach(ph => { ph.pct = e.drop ? ph.dur / e.drop * 100 : null; });
+  return { p, pe, tp, ror, btAt, etAt, rorAt, chargeBT, chargeET, devT, dtr, dropBT, fcBT, devRise, rorFc, loss, diff, phases };
+}
+function predict(A, t){
+  if(!A.p.length || !A.tp || !A.ror.length) return null;
+  const last = A.p[A.p.length - 1], rr = A.ror[A.ror.length - 1];
+  if(rr.t <= A.tp.t) return null;
+  return last.bt + rr.v * (t - last.t) / 60;
+}
+function predictET(A, t){
+  if(!A.pe.length) return null;
+  const last = A.pe[A.pe.length - 1], re = rorOf(A.pe, null);
+  return re.length ? last.bt + re[re.length - 1].v * (t - last.t) / 60 : last.bt;
+}
+
+/* ================= chart ================= */
+function rrect(c, x, y, w, h, rad){
+  c.beginPath(); c.moveTo(x + rad, y); c.lineTo(x + w - rad, y); c.quadraticCurveTo(x + w, y, x + w, y + rad);
+  c.lineTo(x + w, y + h - rad); c.quadraticCurveTo(x + w, y + h, x + w - rad, y + h); c.lineTo(x + rad, y + h);
+  c.quadraticCurveTo(x, y + h, x, y + h - rad); c.lineTo(x, y + rad); c.quadraticCurveTo(x, y, x + rad, y); c.closePath();
+}
+function drawChart(c, x0, y0, W, H, o){
+  const T = o.theme || DARK, s = o.scale || 1, r = o.roast || null, tg = o.target || null;
+  const A = r ? analyze(r) : { p:[], pe:[], ror:[], tp:null, btAt:() => null, chargeBT:null };
+  const ev = r ? (r.ev || {}) : {};
+  const tpts = tg ? sortPts(tg.points) : [];
+  const now = o.now ?? null;
+  const fs = 10 * s;
+  const lastT = a => a.length ? a[a.length - 1].t : 0;
+  const endT = ev.drop != null ? ev.drop : now != null ? now : Math.max(lastT(A.p), lastT(A.pe));
+  const showPhases = !!r && endT > 0;
+  const bandH = showPhases ? 14 * s : 0;
+  const pad = { l:36 * s, r:28 * s, t:showPhases ? bandH + 8 * s : 8 * s, b:20 * s };
+  c.save(); c.translate(x0, y0);
+  if(T.bg){ c.fillStyle = T.bg; c.fillRect(0, 0, W, H); }
+  let tMax = Math.max(600, lastT(A.p), lastT(A.pe), ev.drop || 0, lastT(tpts), now || 0);
+  tMax = Math.ceil((tMax + 30) / 60) * 60;
+  const vals = [...A.p.map(q => q.bt), ...A.pe.map(q => q.bt), ...tpts.map(q => q.bt)];
+  const yMax = Math.max(240, vals.length ? Math.ceil((Math.max(...vals) + 10) / 10) * 10 : 0);
+  const yMin = Math.max(0, Math.min(50, vals.length ? Math.floor((Math.min(...vals) - 10) / 10) * 10 : 50));
+  const rMax = 30;
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const X = t => pad.l + t / tMax * pw;
+  const Y = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ph;
+  const YR = v => pad.t + (1 - v / rMax) * ph;
+
+  /* grid */
+  c.font = `${fs}px ${FONT}`; c.lineWidth = 1 * s;
+  c.strokeStyle = T.grid; c.fillStyle = T.muted; c.textAlign = 'center'; c.textBaseline = 'top';
+  const mins = tMax / 60, stepM = mins > 24 ? 4 : mins > 14 ? 2 : 1;
+  for(let m = 0; m <= mins; m += stepM){
+    const x = X(m * 60); c.beginPath(); c.moveTo(x, pad.t); c.lineTo(x, pad.t + ph); c.stroke();
+    c.fillText(String(m), x, pad.t + ph + 4 * s);
+  }
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  let yStep = 25;
+  while(yStep < 100 && ph / ((yMax - yMin) / yStep) < 18 * s) yStep *= 2;
+  for(let v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep){
+    const y = Y(v); c.beginPath(); c.moveTo(pad.l, y); c.lineTo(pad.l + pw, y); c.stroke();
+    c.fillText(String(v), pad.l - 5 * s, y);
+  }
+  c.textAlign = 'left'; c.fillStyle = T.ror;
+  for(let v = 0; v <= rMax; v += 10) c.fillText(String(v), pad.l + pw + 5 * s, YR(v));
+
+  /* phase band (drying / maillard / development) */
+  if(showPhases){
+    const de = ev.yellow, fc = ev.fc, by = pad.t - bandH - 4 * s;
+    const segs = [{ from:0, to:de != null ? Math.min(de, endT) : endT, name:'ドライ', col:T.phDry }];
+    if(de != null) segs.push({ from:de, to:fc != null ? Math.min(fc, endT) : endT, name:'メイラード', col:T.phMai });
+    if(fc != null) segs.push({ from:fc, to:endT, name:'発達', col:T.phDev });
+    segs.forEach(sg => {
+      const xa = X(sg.from), xb = X(Math.max(sg.from, sg.to));
+      if(xb - xa < 1) return;
+      c.globalAlpha = 0.28; c.fillStyle = sg.col; c.fillRect(xa, by, xb - xa, bandH); c.globalAlpha = 1;
+      c.fillStyle = sg.col; c.fillRect(xa, by, xb - xa, 2 * s);
+      const dur = sg.to - sg.from, pct = endT > 0 ? (dur / endT * 100).toFixed(0) : '0';
+      c.font = `600 ${fs * 0.95}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'middle';
+      const room = xb - xa - 6 * s;
+      const txt = [`${sg.name} ${fmt(dur)} ${pct}%`, `${fmt(dur)} ${pct}%`, `${pct}%`].find(tx => c.measureText(tx).width <= room);
+      if(txt){ c.fillStyle = T.text; c.fillText(txt, xa + 3 * s, by + bandH / 2 + 1 * s); }
+    });
+  }
+
+  c.save(); c.beginPath(); c.rect(pad.l, pad.t, pw, ph); c.clip();
+  const path = (pts, fy) => { c.beginPath(); pts.forEach((q, i) => { const x = X(q.t), y = fy(q); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke(); };
+
+  /* heat / air step lines */
+  if(r && (r.ops || []).length){
+    const oTop = pad.t + ph * 0.72, oBot = pad.t + ph - 3 * s;
+    const YO = v => oBot - v / 10 * (oBot - oTop);
+    const xEnd = X(endT > 0 ? endT : tMax);
+    OPS.forEach(op => {
+      const list = opList(r, op.k); if(!list.length) return;
+      const col = op.k === 'heat' ? T.heat : T.air;
+      c.strokeStyle = col; c.lineWidth = 1.6 * s; c.beginPath();
+      list.forEach((q, i) => { const x = X(q.t); if(i === 0) c.moveTo(x, YO(q.v)); else { c.lineTo(x, YO(list[i - 1].v)); c.lineTo(x, YO(q.v)); } });
+      const lastOp = list[list.length - 1];
+      c.lineTo(Math.max(xEnd, X(lastOp.t)), YO(lastOp.v)); c.stroke();
+      c.fillStyle = col; c.font = `700 ${fs * 0.9}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'bottom';
+      list.forEach(q => c.fillText(`${op.label.slice(0, 1)}${q.v}`, X(q.t) + 2 * s, YO(q.v) - 1 * s));
+    });
+  }
+  /* target */
+  if(tpts.length > 1){
+    c.strokeStyle = T.target; c.lineWidth = 1.8 * s; c.setLineDash([6 * s, 5 * s]);
+    path(tpts, q => Y(q.bt)); c.setLineDash([]);
+  }
+  if(tg && tg.ev){
+    c.strokeStyle = T.target; c.lineWidth = 1.5 * s;
+    ['fc', 'drop'].forEach(k => {
+      const t = tg.ev[k], v = t != null ? tgtAt(tg, t) : null;
+      if(v == null) return;
+      c.beginPath(); c.arc(X(t), Y(v), 4 * s, 0, Math.PI * 2); c.stroke();
+    });
+  }
+  /* event guide lines */
+  EVENTS.forEach(e => {
+    const t = ev[e.k]; if(t == null) return;
+    c.strokeStyle = evColor(T, e.k); c.globalAlpha = 0.5; c.lineWidth = 1 * s; c.setLineDash(e.k === 'drop' ? [] : [2 * s, 3 * s]);
+    c.beginPath(); c.moveTo(X(t), pad.t); c.lineTo(X(t), pad.t + ph); c.stroke();
+    c.setLineDash([]); c.globalAlpha = 1;
+  });
+  /* curves */
+  if(A.ror.length > 1){ c.strokeStyle = T.ror; c.lineWidth = 1.6 * s; path(A.ror, q => YR(q.v)); }
+  if(A.pe.length){
+    c.strokeStyle = T.et; c.lineWidth = 1.8 * s;
+    if(A.pe.length > 1) path(A.pe, q => Y(q.bt));
+    c.fillStyle = T.et; A.pe.forEach(q => { c.beginPath(); c.arc(X(q.t), Y(q.bt), 2.2 * s, 0, Math.PI * 2); c.fill(); });
+  }
+  if(A.p.length){
+    c.strokeStyle = T.actual; c.lineWidth = 2.4 * s;
+    if(A.p.length > 1) path(A.p, q => Y(q.bt));
+    c.fillStyle = T.actual; A.p.forEach(q => { c.beginPath(); c.arc(X(q.t), Y(q.bt), 2.8 * s, 0, Math.PI * 2); c.fill(); });
+  }
+  if(now != null){
+    c.strokeStyle = T.now; c.lineWidth = 1 * s;
+    c.beginPath(); c.moveTo(X(now), pad.t); c.lineTo(X(now), pad.t + ph); c.stroke();
+  }
+  c.restore();
+
+  /* Artisan-style annotations on the BT curve */
+  if(r){
+    const anns = [];
+    if(A.chargeBT != null) anns.push({ t:0, v:A.chargeBT, text:o.long ? `投入 ${fmtT(A.chargeBT)}` : '投入', col:T.muted });
+    if(A.tp) anns.push({ t:A.tp.t, v:A.tp.bt, text:o.long ? `中点 ${fmt(A.tp.t)} ${fmtT(A.tp.bt)}` : '中点', col:T.muted, below:true });
+    EVENTS.forEach(e => {
+      const t = ev[e.k]; if(t == null) return;
+      const v = A.btAt(t);
+      anns.push({ t, v, text:o.long ? `${e.label} ${fmt(t)}${v != null ? ' ' + fmtT(v) : ''}` : e.label, col:evColor(T, e.k) });
+    });
+    const placed = [], boxH = fs + 6 * s;
+    c.font = `600 ${fs}px ${FONT}`; c.textBaseline = 'middle'; c.textAlign = 'left';
+    anns.forEach(a => {
+      const w = c.measureText(a.text).width + 8 * s;
+      const px = X(a.t), py = a.v != null ? Y(a.v) : null;
+      const bx = Math.min(Math.max(px - w / 2, pad.l), pad.l + pw - w);
+      let cands;
+      if(py == null) cands = [0, 1, 2, 3].map(i => pad.t + 2 * s + i * (boxH + 2 * s));
+      else {
+        const above = [10, 28, 46, 64].map(d => py - d * s - boxH), below = [10, 28, 46].map(d => py + d * s);
+        cands = a.below ? [...below, ...above] : [...above, ...below];
+      }
+      const inside = cy => cy >= pad.t && cy + boxH <= pad.t + ph;
+      const free = cy => !placed.some(q => bx < q.x + q.w + 2 * s && bx + w + 2 * s > q.x && cy < q.y + q.h + 2 * s && cy + boxH + 2 * s > q.y);
+      let by = cands.find(cy => inside(cy) && free(cy));
+      if(by == null) by = cands.find(inside) ?? pad.t;
+      placed.push({ x:bx, y:by, w, h:boxH });
+      if(py != null){
+        c.strokeStyle = a.col; c.lineWidth = 1 * s;
+        c.beginPath(); c.moveTo(px, py); c.lineTo(Math.min(Math.max(px, bx), bx + w), by < py ? by + boxH : by); c.stroke();
+        c.fillStyle = a.col; c.beginPath(); c.arc(px, py, 3.2 * s, 0, Math.PI * 2); c.fill();
+      }
+      rrect(c, bx, by, w, boxH, 4 * s);
+      c.fillStyle = T.annBg; c.fill();
+      c.strokeStyle = a.col; c.lineWidth = 1 * s; c.stroke();
+      c.fillStyle = T.annText; c.fillText(a.text, bx + 4 * s, by + boxH / 2 + 0.5 * s);
+    });
+  }
+  c.restore();
+}
+function paint(cv, o){
+  const b = cv.getBoundingClientRect(), W = b.width, H = b.height;
+  if(W < 10 || H < 10) return;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  drawChart(c, 0, 0, W, H, o);
+}
+const drawLive = () => { if(cur && !$('roast').hidden) paint($('liveChart'), { roast:cur, target:cur.target, now:cur.t0 ? elapsed() : null }); };
+const drawRes = () => { if(cur && !$('result').hidden) paint($('resChart'), { roast:cur, target:cur.target, long:true }); };
+const drawProf = () => { if(editProf && !$('profile').hidden) paint($('profChart'), { target:{ points:editProf.points, ev:editProf.ev } }); };
+
+/* ================= views & modal ================= */
+function show(v){
+  ['home', 'roast', 'result', 'profile', 'onboard'].forEach(id => { $(id).hidden = id !== v; });
+  document.body.classList.toggle('lock', v === 'roast');
+  window.scrollTo(0, 0);
+}
+function openModal({ title, text, node, actions = [] }){
+  const m = $('modal'), s = m.querySelector('.sheet');
+  s.innerHTML = '';
+  const h = document.createElement('h3'); h.textContent = title; s.appendChild(h);
+  if(text){ const p = document.createElement('p'); p.textContent = text; s.appendChild(p); }
+  if(node) s.appendChild(node);
+  if(actions.length){
+    const row = document.createElement('div'); row.className = 'row';
+    actions.forEach(a => {
+      const b = document.createElement('button'); b.className = 'btn ' + (a.cls || 'ghost'); b.textContent = a.label;
+      b.onclick = async () => { const keep = a.onClick ? await a.onClick() : false; if(keep !== true) closeModal(); };
+      row.appendChild(b);
+    });
+    s.appendChild(row);
+  }
+  m.hidden = false;
+}
+function closeModal(){ $('modal').hidden = true; }
+$('modal').addEventListener('click', e => { if(e.target === $('modal')) closeModal(); });
+const confirmDialog = (title, text, okLabel, onOk, cls = 'danger') =>
+  openModal({ title, text, actions:[{ label:'やめる' }, { label:okLabel, cls, onClick:onOk }] });
+
+/* ================= sound / wake ================= */
+function initAudio(){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+  }catch(e){}
+}
+function tone(freq, start, dur, vol){
+  if(!audioCtx) return;
+  try{
+    const t = audioCtx.currentTime + start, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }catch(e){}
+}
+function preAlert(){ vib([70, 70, 70]); if(prefs.sound){ tone(880, 0, 0.12, 0.3); tone(880, 0.2, 0.12, 0.3); } }
+function markAlert(){
+  vib(220); if(prefs.sound) tone(1320, 0, 0.4, 0.38);
+  const tm = $('timer'); tm.classList.remove('mark'); void tm.offsetWidth; tm.classList.add('mark');
+}
+async function keepAwake(){
+  try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } }catch(e){}
+}
+function releaseWake(){ try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null; }
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && cur && !$('roast').hidden) keepAwake();
+});
+
+/* ================= home ================= */
+const segOn = (id, v) => [...$(id).children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+function renderHome(){
+  renderGoalCard();
+  const nt = $('memNotice');
+  nt.hidden = store.persistent;
+  nt.textContent = 'このブラウザでは永続保存が使えないため、閉じると記録が消えます。焙煎後にバックアップを書き出してください。';
+  $('resume').hidden = !draft;
+  if(draft) $('resumeTxt').textContent = draft.t0 ? `記録途中の焙煎があります（${draft.bean || '無題'}）` : `準備中の焙煎があります（${draft.bean || '無題'}）`;
+  segOn('intSeg', String(prefs.interval)); segOn('soundSeg', prefs.sound ? '1' : '0'); segOn('chSeg', prefs.channels); segOn('rorSeg', String(prefs.rorWin)); segOn('timeSeg', prefs.timeMode === 'slot' ? 'slot' : 'free');
+  if(document.activeElement !== $('machineIn')) $('machineIn').value = prefs.machine || '';
+
+  const sel = $('profSel'); sel.innerHTML = '';
+  const addOpt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+  addOpt('', 'なし');
+  const profSorted = profiles.slice().sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
+  profSorted.forEach(p => addOpt(p.id, p.name || '無題のターゲット'));
+  sel.value = profiles.some(p => p.id === prefs.profileId) ? prefs.profileId : '';
+
+  [...$('tabs').children].forEach(b => { const on = b.dataset.tab === homeTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $('tabRoasts').hidden = homeTab !== 'roasts';
+  $('tabProfiles').hidden = homeTab !== 'profiles';
+
+  const mkItem = (parts, onClick) => {
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'item';
+    parts.forEach(([cls, txt]) => { const sp = document.createElement('span'); sp.className = cls; sp.textContent = txt; b.appendChild(sp); });
+    b.onclick = onClick; li.appendChild(b); return li;
+  };
+  const ul = $('roastList'); ul.innerHTML = '';
+  const sorted = roasts.slice().sort((a, b) => b.date.localeCompare(a.date));
+  sorted.forEach(r => {
+    const A = analyze(r);
+    const left = [dateLabel(r.date), r.rating ? '★'.repeat(r.rating) : ''].filter(Boolean).join('　');
+    const right = A.dropBT != null ? `排出 ${fmtT(A.dropBT)}℃` : A.chargeBT != null ? `投入 ${fmtT(A.chargeBT)}℃` : '';
+    const lt = (r.tastings || []).slice().sort((a, b) => a.day - b.day).pop();
+    const extra = [A.dtr != null ? `DTR ${A.dtr.toFixed(1)}%` : '', A.loss != null ? `減少 ${A.loss.toFixed(1)}%` : '', A.diff ? `目標との差 ±${A.diff.mae.toFixed(1)}℃` : '', lt ? `味 ${lt.day}日目まで` : ''].filter(Boolean).join('　');
+    const parts = [['i-title', r.bean || '無題の焙煎'], ['i-num', fmt(r.ev.drop)], ['i-sub', left], ['i-sub r', right]];
+    if(extra) parts.push(['i-sub full', extra]);
+    ul.appendChild(mkItem(parts, () => openResult(clone(r))));
+  });
+  $('roastEmpty').textContent = 'まだ記録はありません。上の「記録画面へ」から始められます。';
+  $('roastEmpty').hidden = sorted.length > 0;
+
+  const pl = $('profList'); pl.innerHTML = '';
+  profSorted.forEach(p => {
+    const pts = sortPts(p.points), last = pts[pts.length - 1];
+    const end = p.ev && p.ev.drop != null ? `排出 ${fmt(p.ev.drop)}` : last ? `${fmt(last.t)}まで` : '';
+    const maxBT = pts.length ? Math.max(...pts.map(q => q.bt)) : null;
+    pl.appendChild(mkItem([
+      ['i-title', p.name || '無題のターゲット'], ['i-num', end],
+      ['i-sub', `${pts.length}点　${p.note || (p.from ? '記録から作成' : '手入力')}`], ['i-sub r', maxBT != null ? `最高 ${fmtT(maxBT)}℃` : ''],
+    ], () => openProfile(p)));
+  });
+  $('profEmpty').textContent = '焙煎記録の画面で「ターゲットに登録」するか、下のボタンから作れます。';
+  $('profEmpty').hidden = profiles.length > 0;
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; homeTab = b.dataset.tab; renderHome(); });
+$('intSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prefs.interval = Number(b.dataset.v); savePrefs(); renderHome(); });
+$('chSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prefs.channels = b.dataset.v; savePrefs(); renderHome(); });
+$('rorSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prefs.rorWin = Number(b.dataset.v); savePrefs(); renderHome(); });
+$('machineIn').addEventListener('change', () => { prefs.machine = $('machineIn').value.trim(); savePrefs(); });
+$('soundSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prefs.sound = b.dataset.v === '1'; savePrefs(); renderHome(); });
+$('profSel').addEventListener('change', () => { prefs.profileId = $('profSel').value; savePrefs(); });
+$('testSound').onclick = () => {
+  initAudio(); const keep = prefs.sound; prefs.sound = true;
+  preAlert(); setTimeout(() => { markAlert(); prefs.sound = keep; }, 800);
+  toast('5秒前の予告音 → 記録時刻の音');
+};
+function beginRoast(){
+  const prof = profiles.find(p => p.id === $('profSel').value) || null;
+  cur = normRoast({
+    id:uid('r'), date:new Date().toISOString(), bean:$('beanIn').value.trim(), green:num($('greenIn').value) || num(prefs.goal && prefs.goal.batch) || null, roasted:null, note:'', rating:0, machine:($('machineIn').value.trim() || prefs.machine || ''), tastings:[],
+    target: prof ? { name:prof.name || '無題のターゲット', points:sortPts(prof.points), ev:clone(prof.ev || {}) } : null,
+    interval:prefs.interval, channels:prefs.channels, t0:null, points:[], ops:[], ev:blankEv(), undo:[],
+  });
+  resetInp(); show('roast'); renderRoast(); saveDraft(); keepAwake();
+}
+$('goRoast').onclick = () => {
+  initAudio();
+  if(draft) confirmDialog('途中の焙煎があります', '破棄して新しい焙煎を始めますか？', '破棄して始める', beginRoast, 'primary');
+  else beginRoast();
+};
+$('resumeBtn').onclick = async () => {
+  if(!draft) return;
+  const d = normRoast(clone(draft));
+  if(d.ev.drop != null){
+    upsertRoast(d); await persistRoasts(); await store.del(KEY.draft); draft = null; openResult(d); return;
+  }
+  initAudio();
+  cur = d; resetInp(); show('roast'); if(cur.t0) startTicker(); renderRoast(); keepAwake();
+};
+$('discardBtn').onclick = () => confirmDialog('途中の記録を破棄しますか？', '元に戻せません。', '破棄する', async () => { await store.del(KEY.draft); draft = null; renderHome(); });
+
+/* ================= roast screen: entry ================= */
+function resetInp(){ inp = { slot:null, active:'bt', bt:{ text:'', value:null, dirty:false }, et:{ text:'', value:null, dirty:false } }; }
+const anyDirty = () => inp.bt.dirty || inp.et.dirty;
+const etMode = () => !!cur && cur.channels === 'bt+et';
+const hasPt = t => cur.points.some(p => Math.abs(p.t - t) < 0.5);
+const freeMode = () => prefs.timeMode !== 'slot';
+function slotNow(){
+  if(!cur.t0) return 0;
+  if(freeMode()) return r1(elapsed());
+  const I = cur.interval; let s = Math.round(elapsed() / I) * I;
+  while(hasPt(s)) s += I;
+  return s;
+}
+const lockSlot = () => { if(inp.slot == null) inp.slot = slotNow(); };
+const curSlot = () => inp.slot != null ? inp.slot : slotNow();
+function prefillFor(slot, ch = 'bt'){
+  const A = analyze(cur);
+  if(ch === 'bt' && ble.connected && validTemp(ble.temp)) return { v:r1(ble.temp), src:'BLE' };
+  if(ch === 'et'){
+    const pe = predictET(A, slot);
+    return pe != null ? { v:Math.round(pe), src:A.pe.length > 1 ? '予測' : '直前' } : null;
+  }
+  const pr = predict(A, slot);
+  if(pr != null) return { v:Math.round(pr), src:'予測' };
+  const g = tgtAt(cur.target, slot);
+  if(g != null) return { v:Math.round(g), src:'目標' };
+  if(A.p.length) return { v:Math.round(A.p[A.p.length - 1].bt), src:'直前' };
+  return null;
+}
+function renderEntry(){
+  if(!cur) return;
+  const running = !!cur.t0, dual = etMode();
+  const slot = running ? curSlot() : 0;
+  let hint = '';
+  const box = $('fields'); box.className = 'fields' + (dual ? ' dual' : ''); box.innerHTML = '';
+  (dual ? ['bt', 'et'] : ['bt']).forEach(ch => {
+    const st = inp[ch];
+    let val = '', pre = false;
+    if(st.dirty) val = st.text;
+    else if(running){ const pf = prefillFor(slot, ch); if(pf){ val = String(pf.v); pre = true; if(ch === inp.active) hint = pf.src; } }
+    const b = document.createElement('button');
+    b.className = `fld ${ch}` + (dual && inp.active === ch ? ' active' : '') + (pre ? ' pre' : '') + (val ? '' : ' blank');
+    b.dataset.ch = ch;
+    const sm = document.createElement('small'); sm.textContent = ch.toUpperCase();
+    const sp = document.createElement('span'); sp.textContent = val || '―';
+    b.append(sm, sp); box.appendChild(b);
+  });
+  const base = !running ? '投入時の温度（省略可）' : freeMode() && inp.slot == null ? `いま ${fmt(slot)} の温度` : `${fmt(slot)} の温度`;
+  $('slotLbl').textContent = hint ? `${base}（${hint}）` : base;
+  $('recKey').textContent = dual && running && inp.active === 'bt' ? 'ETへ' : '記録';
+}
+$('fields').addEventListener('click', e => { const b = e.target.closest('.fld'); if(!b || !etMode()) return; inp.active = b.dataset.ch; renderEntry(); });
+function press(k){
+  if(!cur) return;
+  initAudio();
+  if(k === 'rec'){ record(); return; }
+  const ch = inp.active, st = inp[ch];
+  if(k === 'del'){
+    if(!st.dirty){
+      if(!cur.t0) return;
+      lockSlot();
+      const pf = prefillFor(inp.slot, ch);
+      if(!pf){ if(!anyDirty()) inp.slot = null; return; }
+      st.dirty = true; st.text = String(pf.v).slice(0, -1);
+    } else if(!st.text){
+      st.dirty = false; st.value = null;
+      if(!anyDirty()) inp.slot = null;
+      renderEntry(); return;
+    } else st.text = st.text.slice(0, -1);
+    st.value = st.text ? parseFloat(st.text) : null;
+    renderEntry(); return;
+  }
+  if(/^[0-9.]$/.test(k)){
+    if(!st.dirty){ if(k === '.') return; lockSlot(); st.dirty = true; st.text = ''; }
+    if(k === '.' && (!st.text || st.text.includes('.'))) return;
+    if(st.text.replace('.', '').length >= 4) return;
+    st.text += k; st.value = parseFloat(st.text); renderEntry();
+  }
+}
+function step(d){
+  if(!cur) return;
+  initAudio();
+  const ch = inp.active, st = inp[ch];
+  let base = null;
+  if(st.dirty) base = st.value;
+  else if(cur.t0){ lockSlot(); const pf = prefillFor(inp.slot, ch); base = pf ? pf.v : null; if(base == null && !anyDirty()) inp.slot = null; }
+  if(base == null || !isFinite(base)){ toast('先に温度を入力してください'); return; }
+  const v = r1(base + d);
+  st.dirty = true; st.value = v; st.text = fmtT(v); renderEntry();
+}
+function putPoint(t, bt, et){
+  const i = cur.points.findIndex(p => Math.abs(p.t - t) < 0.5);
+  const prev = i >= 0 ? cur.points.splice(i, 1)[0] : null;
+  const pt = { t, bt };
+  if(et != null && isFinite(et)) pt.et = et;
+  cur.points.push(pt); cur.points.sort((a, b) => a.t - b.t);
+  cur.undo.push({ type:'pt', t, bt, prev });
+}
+function typedPair(){
+  if(!inp.bt.dirty || !validTemp(inp.bt.value)) return null;
+  return { bt:inp.bt.value, et:inp.et.dirty && validTemp(inp.et.value) ? inp.et.value : null };
+}
+function record(){
+  if(!cur.t0){ toast('先に「投入して計測スタート」を押してください'); return; }
+  const dual = etMode();
+  if(dual && inp.active === 'bt'){ lockSlot(); inp.active = 'et'; renderEntry(); return; }
+  const t = curSlot();
+  const bt = inp.bt.dirty ? inp.bt.value : ((prefillFor(t, 'bt') || {}).v ?? null);
+  if(!validTemp(bt)){ toast('BTを入力してください（0〜400℃）'); inp.active = 'bt'; renderEntry(); return; }
+  let et = null;
+  if(dual){
+    et = inp.et.dirty ? inp.et.value : ((prefillFor(t, 'et') || {}).v ?? null);
+    if(et != null && !validTemp(et)){ toast('ETは0〜400℃で入力してください'); return; }
+  }
+  putPoint(t, bt, et); resetInp(); vib(15); saveDraft(); renderRoast();
+}
+
+/* ================= roast screen: events, ops, render ================= */
+function charge(){
+  initAudio();
+  cur.t0 = Date.now(); cur.date = new Date().toISOString();
+  const pair = typedPair();
+  if(pair){
+    cur.points = cur.points.filter(q => Math.abs(q.t) >= 0.5);
+    const pt = { t:0, bt:pair.bt }; if(pair.et != null) pt.et = pair.et;
+    cur.points.unshift(pt);
+  }
+  resetInp(); startTicker(); keepAwake(); saveDraft(); renderRoast();
+}
+function markEvent(k){
+  if(!cur) return;
+  if(k === 'charge'){ charge(); return; }
+  if(!cur.t0 || cur.ev[k] != null) return;
+  const t = r1(elapsed());
+  const pair = typedPair();
+  if(pair){ putPoint(t, pair.bt, pair.et); resetInp(); }
+  if(k === 'drop'){ finish(t); return; }
+  cur.ev[k] = t; cur.undo.push({ type:'ev', k });
+  vib(40); saveDraft(); renderRoast();
+}
+async function finish(tDrop){
+  cur.ev.drop = tDrop; cur.undo.push({ type:'ev', k:'drop' });
+  stopTicker(); releaseWake(); vib(60);
+  const saved = clone(cur);
+  upsertRoast(saved);
+  if(await persistRoasts()){ await store.del(KEY.draft); draft = null; }
+  else { await saveDraft(); toast('保存に失敗しました。途中データとして残しています'); }
+  justFinishedId = saved.id;
+  openResult(saved);
+}
+function renderOpsChip(){
+  const btn = $('opsBtn'); btn.innerHTML = '';
+  const add = (cls, txt) => { const sp = document.createElement('span'); if(cls) sp.className = cls; sp.textContent = txt; btn.appendChild(sp); };
+  const h = opNow(cur, 'heat'), a = opNow(cur, 'air');
+  if(h == null && a == null){ add('', '火力と風量を記録'); return; }
+  add('h', `火力 ${h ?? '-'}`); add('', '　'); add('a', `風量 ${a ?? '-'}`);
+}
+function openOps(){
+  if(!cur) return;
+  const wrap = document.createElement('div');
+  OPS.forEach(op => {
+    const cv = opNow(cur, op.k);
+    const g = document.createElement('div'); g.className = 'op-group';
+    const head = document.createElement('div'); head.className = 'op-head';
+    const b = document.createElement('b'); b.textContent = op.label; b.style.color = `var(--${op.k})`;
+    const sp = document.createElement('span'); sp.textContent = cv != null ? `いま ${cv}` : 'まだ記録なし';
+    head.append(b, sp); g.appendChild(head);
+    const grid = document.createElement('div'); grid.className = 'op-grid'; grid.style.setProperty('--c', `var(--${op.k})`);
+    for(let v = 0; v <= 10; v++){
+      const bt = document.createElement('button'); bt.textContent = String(v);
+      if(cv === v) bt.className = 'on';
+      bt.onclick = () => addOp(op.k, v);
+      grid.appendChild(bt);
+    }
+    g.appendChild(grid); wrap.appendChild(g);
+  });
+  openModal({
+    title:cur.t0 ? `操作を記録（${fmt(elapsed())}）` : '開始時の火力と風量',
+    text:'0〜10で記録します。グラフの下側に段差の線で表示されます。',
+    node:wrap, actions:[{ label:'閉じる' }],
+  });
+}
+function addOp(type, v){
+  const t = cur.t0 ? r1(elapsed()) : 0;
+  const i = cur.ops.findIndex(o => o.type === type && Math.abs(o.t - t) < 0.5);
+  const prev = i >= 0 ? cur.ops.splice(i, 1)[0] : null;
+  cur.ops.push({ t, type, v }); cur.ops.sort((a, b) => a.t - b.t);
+  cur.undo.push({ type:'op', t, op:type, v, prev });
+  closeModal(); vib(20);
+  toast(`${fmt(t)} ${OPS.find(o => o.k === type).label} ${v}`);
+  saveDraft(); renderRoast();
+}
+$('opsBtn').onclick = openOps;
+function renderRoast(){
+  if(!cur) return;
+  const running = !!cur.t0, A = analyze(cur);
+  $('quitBtn').textContent = running ? '中止' : '戻る';
+  $('undoBtn').disabled = !cur.undo.length;
+  $('timer').classList.toggle('idle', !running);
+  $('timer').textContent = fmt(elapsed());
+  if(!running){ $('slotFill').style.transform = 'scaleX(0)'; $('slotbar').classList.remove('soon'); }
+  const last = A.p[A.p.length - 1], lastE = A.pe[A.pe.length - 1];
+  $('lastBT').textContent = last ? fmtT(last.bt) : '---';
+  $('lastET').hidden = !etMode();
+  $('lastET').textContent = `ET ${lastE ? fmtT(lastE.bt) : '---'}`;
+  $('lastRoR').textContent = A.ror.length ? A.ror[A.ror.length - 1].v.toFixed(1) : '--';
+  $('pad').classList.toggle('locked', !running);
+  renderOpsChip(); renderBeanChip();
+  const evBox = $('events');
+  if(!running){
+    evBox.innerHTML = '<button class="charge" data-ev="charge">投入して計測スタート</button>';
+  } else {
+    evBox.innerHTML = EVENTS.map(e => {
+      const t = cur.ev[e.k], on = t != null;
+      return `<button class="ev ev-${e.k}${on ? ' on' : ''}" data-ev="${e.k}"${on ? ' disabled' : ''}><span>${e.label}</span>${on ? `<small>${fmt(t)}</small>` : ''}</button>`;
+    }).join('');
+  }
+  renderGuide(A); renderEntry(); drawLive();
+}
+function renderGuide(A){
+  if(!cur) return;
+  A = A || analyze(cur);
+  const tg = cur.target, running = !!cur.t0, I = cur.interval, cells = [];
+  const cell = (label, value, unit = '', cls = '', note = '') => cells.push({ label, value, unit, cls, note });
+  if(!running){
+    if(tg){
+      const tp = sortPts(tg.points);
+      cell('ターゲット', tg.name || '無題', '', 'wide name');
+      cell('目標の排出', fmt(tg.ev && tg.ev.drop != null ? tg.ev.drop : tp.length ? tp[tp.length - 1].t : null));
+    } else {
+      cell('ターゲット', 'なし', '', 'wide name');
+      cell('記録間隔', I === 60 ? '1分' : I === 45 ? '45秒' : '30秒');
+    }
+  } else {
+    const e = elapsed(), ns = (Math.floor(e / I) + 1) * I, fc = cur.ev.fc;
+    const devCell = () => { if(fc != null) cell(e > 0 ? `発達 DTR ${((e - fc) / e * 100).toFixed(0)}%` : '発達', fmt(e - fc)); };
+    if(tg){
+      const tev = tg.ev || {};
+      const evCell = (label, t) => { const over = e > t; cell(`${label} ${fmt(t)}`, fmt(Math.abs(t - e)), over ? '超過' : '後', over ? 'hot' : ''); };
+      const nextCell = () => { const nx = tgtAt(tg, ns); cell(`${fmt(ns)}の目標`, nx != null ? String(Math.round(nx)) : '--', '℃'); };
+      const diffCell = () => {
+        const last = A.p[A.p.length - 1], tl = last ? tgtAt(tg, last.t) : null;
+        if(last && tl != null){
+          const d = last.bt - tl, ok = Math.abs(d) <= 3;
+          cell(ok ? '目標との差' : d > 0 ? '目標との差（高め）' : '目標との差（低め）', signed(d), '℃', ok ? 'ok' : d > 0 ? 'hot' : 'cool');
+        } else cell('目標との差', '--');
+      };
+      if(fc == null){
+        nextCell(); diffCell();
+        if(tev.fc != null) evCell('1ハゼ目標', tev.fc);
+        else { const nw = tgtAt(tg, e); cell('今の目標', nw != null ? String(Math.round(nw)) : '--', '℃'); }
+      } else {
+        diffCell(); devCell();
+        if(tev.drop != null) evCell('排出目標', tev.drop);
+        else nextCell();
+      }
+    } else {
+      const pr = predict(A, ns);
+      cell(`${fmt(ns)}の予測`, pr != null ? String(Math.round(pr)) : '--', '℃', fc == null ? 'wide' : '');
+      cell(A.tp ? `中点 ${fmtT(A.tp.bt)}℃` : '中点', A.tp ? fmt(A.tp.t) : '--:--');
+      devCell();
+    }
+  }
+  const g = $('guide'); g.innerHTML = '';
+  cells.forEach(cn => {
+    const d = document.createElement('div'); d.className = 'g-cell ' + cn.cls;
+    const sm = document.createElement('small'); sm.textContent = cn.label;
+    const b = document.createElement('b'); b.textContent = cn.value;
+    d.append(sm, b);
+    if(cn.unit){ const i = document.createElement('i'); i.textContent = cn.unit; d.appendChild(i); }
+    if(cn.note){ const em = document.createElement('em'); em.textContent = cn.note; d.appendChild(em); }
+    g.appendChild(d);
+  });
+}
+
+function startTicker(){
+  stopTicker();
+  const e = elapsed(), I = cur.interval;
+  lastMark = Math.floor(e / I); lastPre = Math.floor((e + 5) / I); lastDrawSec = -1;
+  ticker = setInterval(tick, 200); tick();
+}
+function stopTicker(){ if(ticker) clearInterval(ticker); ticker = null; }
+function tick(){
+  if(!cur || !cur.t0) return;
+  const e = elapsed(), I = cur.interval;
+  $('timer').textContent = fmt(e);
+  $('slotFill').style.transform = `scaleX(${(e % I) / I})`;
+  $('slotbar').classList.toggle('soon', I - (e % I) <= 5);
+  const pr = Math.floor((e + 5) / I), mk = Math.floor(e / I);
+  if(pr > lastPre){ lastPre = pr; if(pr >= 1) preAlert(); }
+  if(mk > lastMark){ lastMark = mk; if(mk >= 1) markAlert(); }
+  const sec = Math.floor(e);
+  if(sec !== lastDrawSec){ lastDrawSec = sec; renderGuide(); if(!anyDirty() && inp.slot == null) renderEntry(); drawLive(); }
+}
+
+$('pad').addEventListener('pointerdown', e => { const b = e.target.closest('button'); if(!b) return; e.preventDefault(); press(b.dataset.k); });
+$('pad').addEventListener('click', e => { const b = e.target.closest('button'); if(b && e.detail === 0) press(b.dataset.k); });
+function bindRepeat(el, fn){
+  let to = null, iv = null;
+  const stop = () => { clearTimeout(to); clearInterval(iv); to = iv = null; };
+  el.addEventListener('pointerdown', e => { e.preventDefault(); stop(); fn(); to = setTimeout(() => { iv = setInterval(fn, 110); }, 450); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => el.addEventListener(t, stop));
+  el.addEventListener('click', e => { if(e.detail === 0) fn(); });
+}
+bindRepeat($('minusBtn'), () => step(-1));
+bindRepeat($('plusBtn'), () => step(1));
+$('events').addEventListener('click', e => { const b = e.target.closest('button'); if(b) markEvent(b.dataset.ev); });
+$('undoBtn').onclick = () => {
+  const u = cur && cur.undo.pop(); if(!u) return;
+  if(u.type === 'pt'){
+    const i = cur.points.findIndex(p => Math.abs(p.t - u.t) < 0.5 && p.bt === u.bt);
+    if(i >= 0) cur.points.splice(i, 1);
+    if(u.prev){ cur.points.push(u.prev); cur.points.sort((a, b) => a.t - b.t); }
+    toast(`${fmt(u.t)} の ${fmtT(u.bt)}℃ を取り消しました`);
+  } else if(u.type === 'op'){
+    const i = cur.ops.findIndex(o => o.type === u.op && Math.abs(o.t - u.t) < 0.5 && o.v === u.v);
+    if(i >= 0) cur.ops.splice(i, 1);
+    if(u.prev){ cur.ops.push(u.prev); cur.ops.sort((a, b) => a.t - b.t); }
+    toast(`${fmt(u.t)} の${OPS.find(o => o.k === u.op).label} ${u.v} を取り消しました`);
+  } else {
+    cur.ev[u.k] = null;
+    toast(`${EVENTS.find(x => x.k === u.k).label}を取り消しました`);
+  }
+  saveDraft(); renderRoast();
+};
+$('quitBtn').onclick = () => {
+  const leave = async () => { stopTicker(); releaseWake(); await store.del(KEY.draft); draft = null; cur = null; resetInp(); show('home'); renderHome(); };
+  if(!cur.t0 && !cur.points.length && !cur.ops.length){ leave(); return; }
+  confirmDialog('この焙煎の記録を破棄しますか？', '残す場合は「排出」を押して終了してください。', '破棄する', leave);
+};
+document.addEventListener('keydown', e => {
+  if($('roast').hidden || !$('modal').hidden) return;
+  if(e.target.matches && e.target.matches('input,textarea,select')) return;
+  if(/^[0-9.]$/.test(e.key)) press(e.key);
+  else if(e.key === 'Backspace') press('del');
+  else if(e.key === 'Enter') press('rec');
+  else if(e.key === '+' || e.key === 'ArrowUp') step(1);
+  else if(e.key === '-' || e.key === 'ArrowDown') step(-1);
+  else if(e.key === 'Tab' && etMode()){ inp.active = inp.active === 'bt' ? 'et' : 'bt'; renderEntry(); }
+  else return;
+  e.preventDefault();
+});
+
+/* ================= result ================= */
+function statsOf(r){
+  const A = analyze(r), e = r.ev;
+  const tt = t => t != null ? fmt(t) : '--:--';
+  const at = t => { const v = t != null ? A.btAt(t) : null; return v != null ? `${fmtT(v)}℃` : ''; };
+  const list = [
+    ['投入', A.chargeBT != null ? `${fmtT(A.chargeBT)}℃` : '--', A.chargeET != null ? `ET ${fmtT(A.chargeET)}℃` : ''],
+    ['中点', A.tp ? fmt(A.tp.t) : '--:--', A.tp ? `${fmtT(A.tp.bt)}℃` : ''],
+    ['イエロー', tt(e.yellow), at(e.yellow)],
+    ['1ハゼ', tt(e.fc), at(e.fc)],
+  ];
+  if(e.fce != null) list.push(['1ハゼ終', tt(e.fce), at(e.fce)]);
+  if(e.sc != null) list.push(['2ハゼ', tt(e.sc), at(e.sc)]);
+  list.push(['排出', tt(e.drop), at(e.drop)]);
+  list.push(['発達時間', A.devT != null ? fmt(A.devT) : '--:--', A.dtr != null ? `DTR ${A.dtr.toFixed(1)}%` : '']);
+  list.push(['発達中の上昇', A.devRise != null ? `${signed(A.devRise)}℃` : '--', A.rorFc != null ? `1ハゼ時RoR ${A.rorFc.toFixed(1)}` : '']);
+  list.push(['重量減少', A.loss != null ? `${A.loss.toFixed(1)}%` : '--', A.loss != null ? `${num(r.green)}→${num(r.roasted)}g` : '']);
+  if(A.diff) list.push(['目標との差', `±${A.diff.mae.toFixed(1)}℃`, `最大 ${signed(A.diff.worst)}℃`]);
+  return list;
+}
+function openResult(r){ cur = normRoast(r); resetInp(); show('result'); renderResult(); }
+function renderResult(){
+  $('resDate').textContent = dateLabel(cur.date);
+  $('resBean').value = cur.bean || '';
+  $('resGreen').value = cur.green ?? '';
+  $('resRoasted').value = cur.roasted ?? '';
+  $('resMoist').value = cur.moisture ?? '';
+  $('resDensity').value = cur.density ?? '';
+  $('resColor').value = cur.color ?? '';
+  $('resNote').value = cur.note || '';
+  $('resMachine').value = cur.machine || '';
+  const warns = evOrderWarnings(cur.ev);
+  $('resWarn').hidden = !warns.length; $('resWarn').textContent = warns.length ? warns.join(' ') + '「イベント時刻を修正」で直せます。' : '';
+  $('resProf').textContent = cur.target ? `ターゲット：${cur.target.name}` : 'ターゲットなし';
+  $('backRoast').hidden = justFinishedId !== cur.id;
+  $('saveState').textContent = store.persistent ? '変更はこの端末に自動保存されます' : '変更はこの画面を閉じるまで保持されます';
+  const A = analyze(cur);
+  const items = [[DARK.actual, '', 'BT']];
+  if(A.pe.length) items.push([DARK.et, '', 'ET']);
+  if(cur.target) items.push([DARK.target, 'dash', '目標']);
+  items.push([DARK.ror, '', 'RoR（右軸 ℃/分）']);
+  if(opList(cur, 'heat').length) items.push([DARK.heat, '', '火力']);
+  if(opList(cur, 'air').length) items.push([DARK.air, '', '風量']);
+  const lg = $('legend'); lg.innerHTML = '';
+  items.forEach(([c, cls, label]) => {
+    const sp = document.createElement('span'), i = document.createElement('i');
+    i.className = cls; i.style.setProperty('--c', c); sp.appendChild(i); sp.appendChild(document.createTextNode(label)); lg.appendChild(sp);
+  });
+  renderStars(); renderStats(); renderTastings(); renderDiag();
+  requestAnimationFrame(drawRes);
+}
+function renderStats(){
+  const dl = $('stats'); dl.innerHTML = '';
+  statsOf(cur).forEach(([k, v, sub]) => {
+    const d = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = k; dd.textContent = v;
+    if(sub){ const sm = document.createElement('small'); sm.textContent = sub; dd.appendChild(sm); }
+    d.append(dt, dd); dl.appendChild(d);
+  });
+  const A = analyze(cur), tb = $('phases'); tb.innerHTML = '';
+  tb.hidden = !A.phases.length;
+  if(!A.phases.length) return;
+  const colors = { dry:DARK.phDry, mai:DARK.phMai, dev:DARK.phDev };
+  const tr = (cells, tag) => { const row = document.createElement('tr'); cells.forEach(cv => { const el = document.createElement(tag); if(cv instanceof Node) el.appendChild(cv); else el.textContent = cv; row.appendChild(el); }); tb.appendChild(row); };
+  tr(['フェーズ', '時間', '比率', '平均RoR'], 'th');
+  A.phases.forEach(ph => {
+    const name = document.createElement('span'), dot = document.createElement('i');
+    dot.style.setProperty('--c', colors[ph.k]); name.append(dot, document.createTextNode(ph.name));
+    tr([name, fmt(ph.dur), ph.pct != null ? `${ph.pct.toFixed(1)}%` : '--', ph.avg != null ? `${ph.avg.toFixed(1)}℃/分` : '--'], 'td');
+  });
+}
+function renderStars(){
+  const box = $('stars'); box.innerHTML = '';
+  for(let n = 1; n <= 5; n++){
+    const b = document.createElement('button'); b.textContent = '★';
+    b.className = (cur.rating || 0) >= n ? 'on' : '';
+    b.setAttribute('aria-label', `${n}点`);
+    b.onclick = () => { cur.rating = cur.rating === n ? 0 : n; renderStars(); queueSave(); };
+    box.appendChild(b);
+  }
+}
+let saveTimer = null;
+function queueSave(){ clearTimeout(saveTimer); saveTimer = setTimeout(saveResult, 500); }
+async function saveResult(){
+  if(!cur || $('result').hidden) return;
+  upsertRoast(clone(cur));
+  const ok = await persistRoasts();
+  if(!ok) $('saveState').textContent = '保存できませんでした。もう一度編集すると再試行します';
+}
+let diagTimer = null;
+function onResInput(){
+  const optNum = id => { const n = parseFloat($(id).value); return isNaN(n) ? null : n; };
+  cur.bean = $('resBean').value.trim();
+  cur.green = num($('resGreen').value);
+  cur.roasted = num($('resRoasted').value);
+  cur.moisture = optNum('resMoist');
+  cur.density = optNum('resDensity');
+  cur.color = optNum('resColor');
+  cur.note = $('resNote').value;
+  cur.machine = $('resMachine').value.trim();
+  renderStats(); queueSave();
+  clearTimeout(diagTimer); diagTimer = setTimeout(renderDiag, 400);
+}
+['resBean', 'resGreen', 'resRoasted', 'resMachine', 'resMoist', 'resDensity', 'resColor', 'resNote'].forEach(id => $(id).addEventListener('input', onResInput));
+async function leaveResult(){
+  clearTimeout(saveTimer); await saveResult();
+  justFinishedId = null; cur = null; homeTab = 'roasts'; show('home'); renderHome();
+}
+$('resBack').onclick = leaveResult;
+$('newRoastBtn').onclick = leaveResult;
+$('backRoast').onclick = async () => {
+  if(!cur || justFinishedId !== cur.id) return;
+  clearTimeout(saveTimer);
+  roasts = roasts.filter(r => r.id !== cur.id); await persistRoasts();
+  cur.ev.drop = null;
+  const l = cur.undo[cur.undo.length - 1];
+  if(l && l.type === 'ev' && l.k === 'drop') cur.undo.pop();
+  justFinishedId = null; resetInp();
+  show('roast'); startTicker(); keepAwake(); await saveDraft(); renderRoast();
+};
+$('delBtn').onclick = () => confirmDialog('この焙煎を削除しますか？', '元に戻せません。', '削除する', async () => {
+  clearTimeout(saveTimer);
+  const before = roasts.slice();
+  roasts = roasts.filter(r => r.id !== cur.id);
+  if(!await persistRoasts()){ roasts = before; toast('削除できませんでした'); return; }
+  justFinishedId = null; cur = null; show('home'); renderHome(); toast('削除しました');
+});
+$('toProfBtn').onclick = () => {
+  const pts = sortPts(cur.points);
+  if(pts.length < 2){ toast('記録が2点以上ある焙煎だけ登録できます'); return; }
+  const d = new Date(cur.date);
+  const field = document.createElement('input'); field.className = 'modal-in';
+  field.value = `${cur.bean || '無題'} ${d.getMonth() + 1}/${d.getDate()}`;
+  openModal({ title:'ターゲットに登録', text:'この焙煎のBTの推移と、ハゼ・排出の時刻を次回の目標として使えるようにします。', node:field, actions:[
+    { label:'やめる' },
+    { label:'登録する', cls:'primary', onClick: async () => {
+      const p = { id:uid('p'), name:field.value.trim() || '無題のターゲット', points:clone(pts), ev:Object.assign(blankEv(), clone(cur.ev)), from:cur.id, updated:new Date().toISOString() };
+      profiles.push(p);
+      if(!await persistProfiles()){ profiles.pop(); toast('登録できませんでした'); return true; }
+      prefs.profileId = p.id; savePrefs();
+      toast('登録しました。次の焙煎で選択済みになります');
+    }},
+  ]});
+};
+
+/* ================= profile editor ================= */
+function openProfile(p){
+  profIsNew = !p; profDirty = false;
+  editProf = p ? clone(p) : { id:uid('p'), name:'', points:SAMPLE.map(([t, bt]) => ({ t, bt })), ev:{}, updated:null };
+  editProf.points = editProf.points || []; editProf.ev = editProf.ev || {};
+  show('profile'); renderProfile();
+}
+function renderProfile(){
+  $('profName').value = editProf.name || '';
+  $('profName').placeholder = profIsNew ? '例：中煎り 13分' : 'ターゲットの名前';
+  $('profMeta').textContent = profIsNew ? '新規（サンプル値が入っています）' : editProf.note || (editProf.from ? '焙煎記録から作成' : '手入力');
+  const pev = editProf.ev || {};
+  const evText = EVENTS.filter(x => pev[x.k] != null).map(x => `${x.label} ${fmt(pev[x.k])}`).join('　');
+  $('profEvents').textContent = evText ? `目標の時刻：${evText}` : '';
+  $('profEvents').hidden = !evText;
+  profShift = 0; $('shiftSum').textContent = '';
+  $('profDel').hidden = profIsNew;
+  renderProfRows(); requestAnimationFrame(drawProf);
+}
+let profDrawTimer = null;
+function renderProfRows(){
+  const ol = $('profRows'); ol.innerHTML = '';
+  editProf.points.sort((a, b) => a.t - b.t);
+  editProf.points.forEach((p, i) => {
+    const li = document.createElement('li');
+    const tt = document.createElement('span'); tt.className = 'pr-t'; tt.textContent = fmt(p.t);
+    const iv = document.createElement('input'); iv.inputMode = 'decimal'; iv.value = isFinite(p.bt) ? fmtT(p.bt) : '';
+    iv.setAttribute('aria-label', `${fmt(p.t)} の目標温度`);
+    iv.addEventListener('input', () => {
+      const v = parseFloat(iv.value); p.bt = isNaN(v) ? NaN : v; profDirty = true;
+      clearTimeout(profDrawTimer); profDrawTimer = setTimeout(drawProf, 150);
+    });
+    const u = document.createElement('span'); u.className = 'pr-u'; u.textContent = '℃';
+    const x = document.createElement('button'); x.className = 'pr-x'; x.textContent = '×'; x.setAttribute('aria-label', `${fmt(p.t)} の行を削除`);
+    x.onclick = () => { editProf.points.splice(i, 1); profDirty = true; renderProfRows(); drawProf(); };
+    li.append(tt, iv, u, x); ol.appendChild(li);
+  });
+}
+$('newProf').onclick = () => openProfile(null);
+$('profName').addEventListener('input', () => { profDirty = true; });
+$('shiftBtns').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b || !editProf) return;
+  const d = Number(b.dataset.d);
+  editProf.points.forEach(p => { if(isFinite(p.bt)) p.bt = r1(p.bt + d); });
+  profShift += d; profDirty = true;
+  $('shiftSum').textContent = profShift ? `（${signed(profShift)}℃）` : '';
+  renderProfRows(); drawProf();
+});
+$('addRow').onclick = () => {
+  const pts = editProf.points, last = pts[pts.length - 1];
+  pts.push({ t:last ? last.t + 60 : 0, bt:last && isFinite(last.bt) ? last.bt : 150 });
+  profDirty = true; renderProfRows(); drawProf();
+  const inputs = $('profRows').querySelectorAll('input'); const el = inputs[inputs.length - 1];
+  if(el){ el.focus(); el.select(); }
+};
+$('profSave').onclick = async () => {
+  const pts = editProf.points.filter(p => isFinite(p.bt)).map(p => ({ t:p.t, bt:r1(p.bt) }));
+  if(pts.length < 2){ toast('温度が入った行が2つ以上必要です'); return; }
+  const rec = Object.assign({}, editProf, { name:$('profName').value.trim() || '無題のターゲット', points:pts, updated:new Date().toISOString() });
+  const before = profiles.slice();
+  const i = profiles.findIndex(p => p.id === rec.id);
+  if(i >= 0) profiles[i] = rec; else profiles.push(rec);
+  if(!await persistProfiles()){ profiles = before; toast('保存できませんでした'); return; }
+  if(profIsNew){ prefs.profileId = rec.id; savePrefs(); }
+  editProf = null; homeTab = 'profiles'; show('home'); renderHome(); toast('ターゲットを保存しました');
+};
+$('profBack').onclick = () => {
+  const leave = () => { editProf = null; homeTab = 'profiles'; show('home'); renderHome(); };
+  if(profDirty) confirmDialog('保存せずに戻りますか？', '編集した内容は失われます。', '戻る', leave);
+  else leave();
+};
+$('profDel').onclick = () => confirmDialog('このターゲットを削除しますか？', '過去の焙煎記録に残っている目標線は消えません。', '削除する', async () => {
+  const before = profiles.slice();
+  profiles = profiles.filter(p => p.id !== editProf.id);
+  if(!await persistProfiles()){ profiles = before; toast('削除できませんでした'); return; }
+  if(prefs.profileId === editProf.id){ prefs.profileId = ''; savePrefs(); }
+  editProf = null; homeTab = 'profiles'; show('home'); renderHome(); toast('削除しました');
+});
+
+
+/* ================= CSV target import ================= */
+function parseCsvRow(line){
+  const out=[]; let cur='', q=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){
+      if(q && line[i+1]==='"'){ cur+='"'; i++; }
+      else q=!q;
+    } else if(ch===',' && !q){ out.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  out.push(cur); return out;
+}
+function profileFromCSV(text, filename){
+  const lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()!=='');
+  let bean='';
+  for(const ln of lines){
+    if(ln.startsWith('# 豆,')){ const a=parseCsvRow(ln); bean=(a[1]||'').trim(); break; }
+  }
+  const hi=lines.findIndex(ln => /^time_sec\s*,/i.test(ln));
+  if(hi<0) throw new Error('time_sec の列が見つかりません');
+  const head=parseCsvRow(lines[hi]).map(x=>x.trim());
+  const it=head.findIndex(x=>x.toLowerCase()==='time_sec');
+  let ib=head.findIndex(x=>x.toUpperCase()==='BT');
+  if(ib<0) ib=head.findIndex(x=>x.toLowerCase()==='temp_c');
+  const ie=head.findIndex(x=>x.toLowerCase()==='event');
+  if(it<0 || ib<0) throw new Error('時間または温度列が見つかりません');
+  const pts=[], ev=blankEv();
+  const setEv=(label,t)=>{
+    const z=String(label||'').trim().toLowerCase();
+    if(!z) return;
+    if(z.includes('yellow')||z.includes('イエロー')||z.includes('dry end')) ev.yellow=t;
+    else if(z.includes('1c start')||z==='1ハゼ'||z.includes('fcs')) ev.fc=t;
+    else if(z.includes('1c end')||z.includes('1ハゼ終')||z.includes('fce')) ev.fce=t;
+    else if(z.includes('2ハゼ')||z.includes('scs')) ev.sc=t;
+    else if(z.includes('drop')||z.includes('排出')) ev.drop=t;
+  };
+  for(let i=hi+1;i<lines.length;i++){
+    const a=parseCsvRow(lines[i]); const t=parseFloat(a[it]), bt=parseFloat(a[ib]);
+    if(Number.isFinite(t) && Number.isFinite(bt)) pts.push({t,bt});
+    if(ie>=0 && Number.isFinite(t)) setEv(a[ie],t);
+  }
+  const clean=sortPts(pts);
+  if(clean.length<2) throw new Error('温度記録が2点以上必要です');
+  const base=(bean || String(filename||'CSV').replace(/\.csv$/i,'').replace(/^roast[_-]?/i,'')).trim();
+  return { id:uid('p-csv-'), name:`${base}（CSV）`, note:'CSVから読み込み', points:clean, ev, updated:new Date().toISOString() };
+}
+$('importProfBtn').onclick = () => $('importProfFile').click();
+$('importProfFile').addEventListener('change', async e => {
+  const f=e.target.files && e.target.files[0]; if(!f) return;
+  try{
+    const p=profileFromCSV(await f.text(), f.name); profiles.push(p); await persistProfiles(); prefs.profileId=p.id; await savePrefs(); homeTab='profiles'; renderHome(); toast('CSVをターゲットに登録しました');
+  }catch(err){ toast('CSVを読み込めません: '+err.message); }
+  e.target.value='';
+});
+
+/* ================= legacy Mini migration ================= */
+async function migrateMiniHistory(){
+  if(prefs.migratedMiniHistoryV1) return;
+  let h=[];
+  try{ h=safeParse(localStorage.getItem('yoko_roast_mini_history'),[]); }catch(e){}
+  if(Array.isArray(h)){
+    const mapEvName = n => ({'Yellow':'yellow','1C Start':'fc','1C End':'fce','Drop':'drop'}[n] || null);
+    h.forEach(x => {
+      if(!x || !Array.isArray(x.points) || x.points.length<1) return;
+      const id='rmini-'+String(x.id || Date.parse(x.date) || uid('x'));
+      if(roasts.some(r=>r.id===id)) return;
+      const ev=blankEv(); (x.events||[]).forEach(e=>{ const k=mapEvName(e.name); if(k && isFinite(e.t)) ev[k]=Number(e.t); });
+      const pts=x.points.filter(p=>isFinite(p.t)&&isFinite(p.temp)).map(p=>({t:Number(p.t),bt:Number(p.temp)}));
+      if(!pts.length) return;
+      roasts.push(normRoast({ id, date:x.date||new Date().toISOString(), bean:x.bean||'', green:num(x.greenWeight), roasted:num(x.roastedWeight), note:x.note||'', rating:0, target:null, interval:[30,45,60,120,180].includes(x.intervalSec)?x.intervalSec:60, channels:'bt', t0:null, points:pts, ops:[], ev, undo:[] }));
+    });
+    await persistRoasts();
+  }
+  prefs.migratedMiniHistoryV1=true; await savePrefs();
+}
+
+/* ================= export ================= */
+async function shareFile(name, blob, fallback){
+  const dl = await capDownloads();
+  if(dl){
+    try{ await dl.save({ filename:name, data:blob }); toast('保存しました'); return; }
+    catch(e){
+      const code = e && e.code;
+      if(code === 'declined') return;
+      if(code === 'rate_limited'){ toast('少し待ってからもう一度押してください'); return; }
+      if(code !== 'unavailable' && code !== 'not_granted' && code !== 'capability_disabled' && code !== 'capability_removed' && code !== 'rejected_extension'){ toast('保存できませんでした。表示した内容をコピーしてください'); }
+    }
+  }
+  try{
+    const file = new File([blob], name, { type:blob.type });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file], title:name }); return; }
+  }catch(e){ if(e && e.name === 'AbortError') return; }
+  fallback();
+}
+function fileName(r, suffix, ext){
+  const d = new Date(r.date), p = n => String(n).padStart(2, '0');
+  const bean = (r.bean || 'roast').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 30);
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}_${bean}${suffix}.${ext}`;
+}
+function fitText(c, text, maxW){
+  if(c.measureText(text).width <= maxW) return text;
+  let t = text;
+  while(t.length > 1 && c.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+function propsText(r){
+  return [r.moisture != null ? `水分 ${r.moisture}%` : '', r.density != null ? `密度 ${r.density}g/L` : '', r.color != null ? `色値 ${r.color}` : ''].filter(Boolean).join('　');
+}
+function renderExportImage(r){
+  const W = 1200, H = 980, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d'), T = LIGHT, A = analyze(r);
+  c.fillStyle = T.bg; c.fillRect(0, 0, W, H);
+  c.textBaseline = 'top'; c.textAlign = 'left';
+  c.fillStyle = T.text; c.font = `800 44px ${FONT}`;
+  c.fillText(fitText(c, r.bean || '無題の焙煎', W - 96), 48, 32);
+  c.fillStyle = T.muted; c.font = `24px ${FONT}`;
+  const meta = [dateFull(r.date), num(r.green) ? `生豆 ${num(r.green)}g` : '', r.rating ? '★'.repeat(r.rating) : '', r.target ? `ターゲット：${r.target.name}` : ''].filter(Boolean).join('　');
+  c.fillText(fitText(c, meta, W - 96), 48, 90);
+  const pt = propsText(r);
+  if(pt){ c.font = `22px ${FONT}`; c.fillText(fitText(c, pt, W - 96), 48, 122); }
+  const pick = ['投入', '中点', '1ハゼ', '排出', '発達時間', '重量減少', '目標との差'];
+  const st = statsOf(r).filter(([k]) => pick.includes(k));
+  const colW = (W - 96) / st.length, sy = pt ? 168 : 152;
+  st.forEach(([k, v, sub], i) => {
+    const x = 48 + i * colW;
+    c.fillStyle = T.muted; c.font = `20px ${FONT}`; c.fillText(k, x, sy);
+    c.fillStyle = T.text; c.font = `800 32px ${FONT}`; c.fillText(fitText(c, v, colW - 10), x, sy + 28);
+    if(sub){ c.fillStyle = T.muted; c.font = `600 18px ${FONT}`; c.fillText(fitText(c, sub, colW - 10), x, sy + 68); }
+  });
+  let lx = 48;
+  const ly = sy + 118;
+  const legend = [[T.actual, [], 'BT']];
+  if(A.pe.length) legend.push([T.et, [], 'ET']);
+  if(r.target) legend.push([T.target, [12, 8], '目標']);
+  legend.push([T.ror, [], 'RoR（右軸 ℃/分）']);
+  if(opList(r, 'heat').length) legend.push([T.heat, [], '火力']);
+  if(opList(r, 'air').length) legend.push([T.air, [], '風量']);
+  c.font = `20px ${FONT}`; c.textBaseline = 'middle';
+  legend.forEach(([col, dash, label]) => {
+    c.strokeStyle = col; c.lineWidth = 4; c.setLineDash(dash);
+    c.beginPath(); c.moveTo(lx, ly); c.lineTo(lx + 36, ly); c.stroke(); c.setLineDash([]);
+    c.fillStyle = T.muted; c.fillText(label, lx + 46, ly);
+    lx += 46 + c.measureText(label).width + 30;
+  });
+  if(r.note){ c.textAlign = 'right'; c.fillStyle = T.muted; c.fillText(fitText(c, r.note.replace(/\s+/g, ' '), W - lx - 48), W - 48, ly); }
+  const cy = ly + 26;
+  drawChart(c, 16, cy, W - 32, H - cy - 16, { roast:r, target:r.target, theme:Object.assign({}, LIGHT, { bg:null }), scale:2, long:true });
+  return cv;
+}
+function textSheet(title, text, name, note){
+  const wrap = document.createElement('div');
+  if(note){ const p = document.createElement('p'); p.textContent = note; wrap.appendChild(p); }
+  const ta = document.createElement('textarea'); ta.readOnly = true; ta.value = text.replace(/^\uFEFF/, ''); wrap.appendChild(ta);
+  const p2 = document.createElement('p'); p2.style.marginTop = '8px'; p2.textContent = `ファイル名の例：${name}`; wrap.appendChild(p2);
+  openModal({ title, node:wrap, actions:[
+    { label:'閉じる' },
+    { label:'コピー', cls:'primary', onClick: async () => {
+      try{ await navigator.clipboard.writeText(ta.value); toast('コピーしました'); }
+      catch(e){ ta.focus(); ta.select(); try{ document.execCommand('copy'); toast('コピーしました'); }catch(_){ toast('全選択しました。長押しでコピーしてください'); } }
+      return true;
+    }},
+  ]});
+}
+$('imgBtn').onclick = () => {
+  const cv = renderExportImage(cur), name = fileName(cur, '', 'png');
+  cv.toBlob(blob => {
+    if(!blob){ toast('画像を作れませんでした'); return; }
+    shareFile(name, blob, () => {
+      const url = cv.toDataURL('image/png');
+      const wrap = document.createElement('div');
+      const img = document.createElement('img'); img.src = url; img.alt = '焙煎グラフ'; wrap.appendChild(img);
+      const p = document.createElement('p'); p.style.marginTop = '10px';
+      p.textContent = '画像を長押しして保存してください。';
+      wrap.appendChild(p);
+      openModal({ title:'グラフ画像', node:wrap, actions:[{ label:'閉じる' }] });
+    });
+  }, 'image/png');
+};
+function toCSV(r){
+  const A = analyze(r), q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const rorMap = new Map(A.ror.map(x => [x.t, x.v]));
+  const lines = [
+    `# 豆,${q(r.bean)}`, `# 日時,${q(dateFull(r.date))}`, `# 生豆(g),${num(r.green) ?? ''}`, `# 焙煎後(g),${num(r.roasted) ?? ''}`,
+    `# 生豆の水分(%),${r.moisture ?? ''}`, `# 生豆の密度(g/L),${r.density ?? ''}`, `# 焙煎度(色値),${r.color ?? ''}`,
+    `# 評価,${r.rating || ''}`, `# ターゲット,${q(r.target ? r.target.name : '')}`, `# メモ,${q(r.note)}`,
+    'time_sec,time,BT,ET,target,diff,RoR,event',
+  ];
+  const rows = (r.points || []).filter(p => isFinite(p.t) && isFinite(p.bt)).map(p => ({ t:p.t, bt:p.bt, et:isFinite(p.et) ? p.et : null, ror:rorMap.get(p.t), ev:'' }));
+  EVENTS.forEach(e => { const t = r.ev[e.k]; if(t != null) rows.push({ t, bt:A.btAt(t), et:A.etAt(t), ror:null, ev:e.label }); });
+  (r.ops || []).forEach(o => rows.push({ t:o.t, bt:null, et:null, ror:null, ev:`${OPS.find(x => x.k === o.type).label}=${o.v}` }));
+  rows.sort((a, b) => a.t - b.t || (a.ev ? 1 : -1));
+  rows.forEach(x => {
+    const tv = x.bt != null ? tgtAt(r.target, x.t) : null;
+    lines.push([x.t, fmt(x.t), x.bt != null ? r1(x.bt) : '', x.et != null ? r1(x.et) : '', tv != null ? r1(tv) : '', x.bt != null && tv != null ? r1(x.bt - tv) : '', x.ror != null ? x.ror.toFixed(1) : '', x.ev].join(','));
+  });
+  return '\uFEFF' + lines.join('\n') + '\n';
+}
+/* Artisan CSV: tab separated, header "Date:dd.MM.yyyy / Unit / CHARGE / TP / DRYe / FCs / FCe / SCs / SCe / DROP / COOL / Time",
+   then Time1 Time2 ET BT Event. Missing readings are written as -1, as Artisan does. */
+function toArtisanCSV(r){
+  const A = analyze(r), e = r.ev || {}, d = new Date(r.date), p2 = n => String(n).padStart(2, '0');
+  const mmss = sec => { const v = Math.max(0, Math.round(sec)); return `${p2(Math.floor(v / 60))}:${p2(v % 60)}`; };
+  const hdrT = t => t != null && Math.round(t) > 0 ? mmss(t) : '';
+  const rows = new Map();
+  (r.points || []).forEach(q => {
+    if(!isFinite(q.t) || !isFinite(q.bt)) return;
+    rows.set(Math.max(0, Math.round(q.t)), { bt:q.bt, et:isFinite(q.et) ? q.et : null, ev:'' });
+  });
+  if(!rows.has(0)) rows.set(0, { bt:null, et:null, ev:'' });
+  const mark = (t, name) => {
+    if(t == null) return;
+    const s = Math.max(0, Math.round(t));
+    if(!rows.has(s)) rows.set(s, { bt:A.btAt(t), et:A.etAt(t), ev:'' });
+    const row = rows.get(s); if(!row.ev) row.ev = name;
+  };
+  mark(0, 'CHARGE');
+  if(A.tp) mark(A.tp.t, 'TP');
+  EVENTS.forEach(x => mark(e[x.k], x.ak));
+  const val = v => v == null || !isFinite(v) ? '-1' : String(r1(v));
+  const header = [
+    `Date:${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()}`, 'Unit:C', 'CHARGE:00:00',
+    `TP:${A.tp ? hdrT(A.tp.t) : ''}`, `DRYe:${hdrT(e.yellow)}`, `FCs:${hdrT(e.fc)}`, `FCe:${hdrT(e.fce)}`,
+    `SCs:${hdrT(e.sc)}`, 'SCe:', `DROP:${hdrT(e.drop)}`, 'COOL:', `Time:${p2(d.getHours())}:${p2(d.getMinutes())}`,
+  ];
+  const lines = [header.join('\t'), ['Time1', 'Time2', 'ET', 'BT', 'Event'].join('\t')];
+  [...rows.keys()].sort((a, b) => a - b).forEach(s => {
+    const row = rows.get(s);
+    lines.push([mmss(s), mmss(s), val(row.et), val(row.bt), row.ev].join('\t'));
+  });
+  return lines.join('\n') + '\n';
+}
+$('csvBtn').onclick = () => {
+  const text = toCSV(cur), name = fileName(cur, '', 'csv');
+  shareFile(name, new Blob([text], { type:'text/csv' }), () => textSheet('CSV', text, name));
+};
+$('artisanBtn').onclick = () => {
+  const text = toArtisanCSV(cur), name = fileName(cur, '_artisan', 'csv');
+  shareFile(name, new Blob([text], { type:'text/csv' }), () =>
+    textSheet('Artisan用CSV', text, name, 'Artisanの「ファイル → インポート → Artisan CSV」で読み込めます。温度とイベントが入り、火力・風量やメモは含まれません。'));
+};
+$('backupBtn').onclick = () => {
+  const text = JSON.stringify({ version:3, roasts, profiles });
+  const name = `roastlog-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  shareFile(name, new Blob([text], { type:'application/json' }), () =>
+    textSheet('バックアップ', text, name, `焙煎${roasts.length}件、ターゲット${profiles.length}件。この文字列をメモなどに保存しておけば、あとで読み込めます。`));
+};
+$('restoreBtn').onclick = () => {
+  const ta = document.createElement('textarea'); ta.placeholder = 'ここに貼り付け';
+  openModal({ title:'バックアップを読み込む', text:'書き出した文字列を貼り付けてください。今ある記録は残したまま、新しいものだけ追加します。', node:ta, actions:[
+    { label:'やめる' },
+    { label:'読み込む', cls:'primary', onClick: async () => {
+      const res = await mergeBackup(safeParse(ta.value.trim(), null));
+      if(!res){ toast('読み込めませんでした。書き出した文字列をそのまま貼り付けてください'); return true; }
+      if(!res.ok){ toast('保存できませんでした'); return true; }
+      renderHome(); toast(`焙煎${res.nr}件、ターゲット${res.np}件を追加しました`);
+    }},
+  ]});
+};
+
+window.addEventListener('resize', () => { drawLive(); drawRes(); drawProf(); });
+
+
+/* ================= PWA install ================= */
+function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); installPromptEvent = e;
+  if(!isStandalone()) $('installCard').hidden = false;
+});
+window.addEventListener('appinstalled', () => { installPromptEvent = null; $('installCard').hidden = true; toast('アプリをインストールしました'); });
+$('installBtn').onclick = async () => {
+  if(!installPromptEvent){ toast('Chromeのメニューから「アプリをインストール」を選んでください'); return; }
+  installPromptEvent.prompt();
+  try{ await installPromptEvent.userChoice; }catch(e){}
+  installPromptEvent = null; $('installCard').hidden = true;
+};
+
+/* ================= Web Bluetooth (experimental) ================= */
+function ensureBlePrefs(){
+  prefs.ble = Object.assign({ service:'', characteristic:'', parser:'text', auto:false, every:2 }, prefs.ble || {});
+  prefs.ble.every = Math.max(1, Math.min(60, Number(prefs.ble.every) || 2));
+}
+function updateBleUI(){
+  const supported = !!navigator.bluetooth && window.isSecureContext;
+  $('bleSupport').textContent = supported ? 'BLE対応' : (navigator.bluetooth ? 'HTTPSが必要' : '非対応');
+  $('bleConnectBtn').disabled = !supported;
+  $('bleDot').classList.toggle('on', !!ble.connected);
+  $('bleState').textContent = ble.connected ? (ble.device?.name || 'BLE接続中') : '未接続';
+  $('bleTemp').textContent = validTemp(ble.temp) ? `${fmtT(ble.temp)}℃` : '';
+  $('bleRoastChip').hidden = !ble.connected;
+  $('bleRoastChip').classList.toggle('connected', !!ble.connected);
+  if(ble.connected) $('bleRoastChip').textContent = validTemp(ble.temp) ? `BLE ${fmtT(ble.temp)}℃` : 'BLE接続';
+}
+function parseBleValue(dv){
+  ensureBlePrefs();
+  const mode = prefs.ble.parser;
+  try{
+    if(mode === 'float32le' && dv.byteLength >= 4) return dv.getFloat32(0, true);
+    if(mode === 'int16x10le' && dv.byteLength >= 2) return dv.getInt16(0, true) / 10;
+    if(mode === 'uint16x10le' && dv.byteLength >= 2) return dv.getUint16(0, true) / 10;
+    const bytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+    ble.raw = [...bytes].map(x => x.toString(16).padStart(2,'0')).join(' ');
+    const s = new TextDecoder().decode(bytes).replace(/\0/g,'').trim();
+    const m = s.match(/-?\d+(?:\.\d+)?/);
+    return m ? Number(m[0]) : null;
+  }catch(e){ return null; }
+}
+function addBlePoint(temp){
+  if(!cur || !cur.t0 || !prefs.ble?.auto || !validTemp(temp)) return;
+  const t = r1(elapsed()), every = Number(prefs.ble.every) || 2;
+  if(t - ble.lastAutoT < every - .15) return;
+  ble.lastAutoT = t;
+  const pt = { t, bt:r1(temp) };
+  cur.points.push(pt); cur.points.sort((a,b) => a.t-b.t);
+  const now = Date.now();
+  if(now - ble.lastSaveMs > 5000){ ble.lastSaveMs = now; saveDraft(); }
+  renderRoast();
+}
+function onBleValue(ev){
+  const v = parseBleValue(ev.target.value);
+  if(validTemp(v)){
+    ble.temp = r1(v); updateBleUI(); addBlePoint(ble.temp);
+    if(cur && !$('roast').hidden && !anyDirty()) renderEntry();
+  }
+}
+async function connectBle(){
+  ensureBlePrefs();
+  if(!navigator.bluetooth || !window.isSecureContext){ toast('BLE接続にはPixelのChromeとHTTPSが必要です'); return; }
+  const service = prefs.ble.service.trim(), characteristic = prefs.ble.characteristic.trim();
+  if(!service || !characteristic){ openBleConfig(true); return; }
+  try{
+    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:[service] });
+    device.addEventListener('gattserverdisconnected', () => { ble.connected=false; ble.server=null; ble.characteristic=null; updateBleUI(); toast('Bluetoothが切断されました'); });
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(service);
+    const ch = await svc.getCharacteristic(characteristic);
+    ble.device=device; ble.server=server; ble.characteristic=ch; ble.connected=true; ble.temp=null; ble.lastAutoT=-999;
+    if(ch.properties.notify || ch.properties.indicate){ await ch.startNotifications(); ch.addEventListener('characteristicvaluechanged', onBleValue); }
+    else if(ch.properties.read){ const value = await ch.readValue(); const v=parseBleValue(value); if(validTemp(v)) ble.temp=r1(v); }
+    updateBleUI(); toast(`${device.name || 'BLE温度計'} に接続しました`);
+  }catch(e){ toast(`BLE接続できませんでした: ${e.name || 'error'}`); }
+}
+function disconnectBle(){ try{ if(ble.device?.gatt?.connected) ble.device.gatt.disconnect(); }catch(e){} ble.connected=false; ble.temp=null; updateBleUI(); }
+function openBleConfig(connectAfter=false){
+  ensureBlePrefs();
+  const wrap=document.createElement('div'); wrap.className='ble-fields';
+  wrap.innerHTML=`
+    <label>Service UUID<input id="bleSvcIn" value="${prefs.ble.service || ''}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+    <label>Characteristic UUID<input id="bleCharIn" value="${prefs.ble.characteristic || ''}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+    <label>データ形式<select id="bleParserIn"><option value="text">文字列（例 198.4）</option><option value="float32le">Float32 little-endian</option><option value="int16x10le">Int16 ÷10 little-endian</option><option value="uint16x10le">Uint16 ÷10 little-endian</option></select></label>
+    <label class="ble-check"><input id="bleAutoIn" type="checkbox"> <span>焙煎中はBLE温度を自動記録する</span></label>
+    <label>自動記録間隔（秒）<input id="bleEveryIn" inputmode="numeric" value="${prefs.ble.every || 2}"></label>
+    <p class="device-note">UUIDとデータ形式は温度計固有です。分かれば手入力なしでBTを自動記録できます。</p>`;
+  wrap.querySelector('#bleParserIn').value=prefs.ble.parser;
+  wrap.querySelector('#bleAutoIn').checked=!!prefs.ble.auto;
+  openModal({title:'Bluetooth温度計の設定', node:wrap, actions:[{label:'閉じる'},{label:'保存',cls:'primary',onClick:async()=>{
+    prefs.ble={service:wrap.querySelector('#bleSvcIn').value.trim(),characteristic:wrap.querySelector('#bleCharIn').value.trim(),parser:wrap.querySelector('#bleParserIn').value,auto:wrap.querySelector('#bleAutoIn').checked,every:Math.max(1,Math.min(60,Number(wrap.querySelector('#bleEveryIn').value)||2))};
+    await savePrefs(); updateBleUI(); if(connectAfter) setTimeout(connectBle,0);
+  }}]});
+}
+$('bleConnectBtn').onclick = () => ble.connected ? disconnectBle() : connectBle();
+$('bleCfgBtn').onclick = () => openBleConfig(false);
+$('bleRoastChip').onclick = () => { if(ble.connected) toast(`BLE ${validTemp(ble.temp)?fmtT(ble.temp)+'℃':'接続中'}${prefs.ble.auto?'・自動記録ON':''}`); };
+
+/* ================= v7: roast info, editing, tasting, CSV log import ================= */
+let _dl;
+async function capDownloads(){
+  if(_dl !== undefined) return _dl;
+  try{
+    _dl = window.claude && typeof window.claude.use === 'function'
+      ? await Promise.race([window.claude.use('downloads'), new Promise(res => setTimeout(() => res(null), 10000))])
+      : null;
+  }catch(e){ _dl = null; }
+  return _dl;
+}
+function parseClock(v){
+  const s = String(v ?? '').trim().replace('：', ':');
+  if(!s) return null;
+  let m = s.match(/^(\d{1,3}):(\d{1,2}(?:\.\d+)?)$/);
+  if(m){ const sec = Number(m[2]); return sec < 60 ? Number(m[1]) * 60 + sec : NaN; }
+  m = s.match(/^\d+(?:\.\d+)?$/);
+  return m ? Number(s) : NaN;
+}
+const EV_ORDER = ['yellow', 'fc', 'fce', 'sc', 'drop'];
+function evOrderWarnings(ev){
+  const out = []; let prev = null;
+  EV_ORDER.forEach(k => {
+    const t = ev && ev[k]; if(t == null) return;
+    if(prev && t < prev.t){
+      out.push(`${EVENTS.find(x => x.k === k).label}（${fmt(t)}）が${EVENTS.find(x => x.k === prev.k).label}（${fmt(prev.t)}）より前になっています。`);
+    } else prev = { k, t };
+  });
+  return out;
+}
+function mkField(label, input){
+  const l = document.createElement('label'); l.className = 'field';
+  const sp = document.createElement('span'); sp.textContent = label; l.append(sp, input); return l;
+}
+function mkInput(id, value, ph, mode){
+  const i = document.createElement('input'); i.id = id; i.value = value ?? ''; if(ph) i.placeholder = ph; if(mode) i.inputMode = mode; i.autocomplete = 'off'; return i;
+}
+
+/* ---- roast info during roast ---- */
+function renderBeanChip(){
+  if(!cur) return;
+  $('beanChipName').textContent = cur.bean || '豆の名前を入力';
+  $('beanChipName').style.color = cur.bean ? '' : 'var(--muted)';
+  $('beanChipSub').textContent = [num(cur.green) ? `${num(cur.green)}g` : '', cur.machine || ''].filter(Boolean).join('・');
+  $('ptEditChip').textContent = `記録点 ${cur.points.length}`;
+}
+function openRoastInfo(){
+  if(!cur) return;
+  const wrap = document.createElement('div');
+  const bean = mkInput('infoBean', cur.bean, '例：アリーチャ');
+  const green = mkInput('infoGreen', cur.green, 'g', 'decimal');
+  const mach = mkInput('infoMachine', cur.machine, '例：直火ドラム500g・豆に直接');
+  const note = document.createElement('textarea'); note.id = 'infoNote'; note.className = 'note-in'; note.value = cur.note || ''; note.placeholder = '産地、精製、焙煎中に気づいたことなど';
+  const nl = document.createElement('label'); nl.className = 'field col';
+  const ns = document.createElement('span'); ns.textContent = 'メモ'; nl.append(ns, note);
+  wrap.append(mkField('豆', bean), mkField('生豆', green), mkField('焙煎機', mach), nl);
+  openModal({ title:'豆と焙煎の情報', text:'焙煎中でも変えられます。タイマーは止まりません。', node:wrap, actions:[
+    { label:'閉じる' },
+    { label:'保存', cls:'primary', onClick: () => {
+      cur.bean = bean.value.trim(); cur.green = num(green.value); cur.machine = mach.value.trim(); cur.note = note.value;
+      if(cur.machine){ prefs.machine = cur.machine; savePrefs(); }
+      saveDraft(); renderRoast(); toast('保存しました');
+    }},
+  ]});
+}
+
+/* ---- point editor (roast and result) ---- */
+function openPtEdit(where){
+  if(!cur) return;
+  const rows = sortPts(cur.points).length ? cur.points.slice().sort((a, b) => a.t - b.t).map(p => ({ t:p.t, bt:p.bt, et:isFinite(p.et) ? p.et : null })) : [];
+  const hasEt = rows.some(r => r.et != null) || cur.channels === 'bt+et';
+  const wrap = document.createElement('div');
+  const ol = document.createElement('ol'); ol.className = 'pt-rows' + (hasEt ? '' : ' no-et');
+  const draw = () => {
+    ol.innerHTML = '';
+    const head = document.createElement('li'); head.className = 'pt-head';
+    (hasEt ? ['時刻', 'BT ℃', 'ET ℃', ''] : ['時刻', 'BT ℃', '']).forEach(t => { const sp = document.createElement('span'); sp.textContent = t; head.appendChild(sp); });
+    ol.appendChild(head);
+    if(!rows.length){ const li = document.createElement('li'); li.className = 'pt-head'; li.textContent = 'まだ記録点がありません'; ol.appendChild(li); }
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      const ti = document.createElement('input'); ti.className = 'pt-t'; ti.value = fmt(r.t); ti.inputMode = 'text'; ti.setAttribute('aria-label', '時刻');
+      ti.addEventListener('change', () => { r.tText = ti.value; });
+      const bi = document.createElement('input'); bi.inputMode = 'decimal'; bi.value = fmtT(r.bt); bi.setAttribute('aria-label', `${fmt(r.t)} のBT`);
+      bi.addEventListener('input', () => { r.btText = bi.value; });
+      const ei = document.createElement('input'); ei.inputMode = 'decimal'; ei.value = r.et != null ? fmtT(r.et) : ''; ei.setAttribute('aria-label', `${fmt(r.t)} のET`);
+      ei.addEventListener('input', () => { r.etText = ei.value; });
+      const x = document.createElement('button'); x.className = 'pr-x'; x.textContent = '×'; x.setAttribute('aria-label', `${fmt(r.t)} の点を消す`);
+      x.onclick = () => { rows.splice(i, 1); draw(); };
+      if(hasEt) li.append(ti, bi, ei, x); else li.append(ti, bi, x); ol.appendChild(li);
+    });
+  };
+  draw(); wrap.appendChild(ol);
+  openModal({ title:'記録点を修正', text:'時刻は「分:秒」で直せます。×で点を消せます。', node:wrap, actions:[
+    { label:'やめる' },
+    { label:'保存', cls:'primary', onClick: () => {
+      const out = [];
+      for(const r of rows){
+        const t = r.tText != null ? parseClock(r.tText) : r.t;
+        const bt = r.btText != null ? parseFloat(r.btText) : r.bt;
+        const etRaw = r.etText != null ? r.etText.trim() : (r.et != null ? String(r.et) : '');
+        const et = etRaw === '' ? null : parseFloat(etRaw);
+        if(t == null || !isFinite(t) || t < 0){ toast(`時刻「${r.tText}」が読めません（例 5:12）`); return true; }
+        if(!validTemp(bt)){ toast(`${fmt(t)} のBTは0〜400℃で入れてください`); return true; }
+        if(et != null && !validTemp(et)){ toast(`${fmt(t)} のETは0〜400℃で入れてください`); return true; }
+        const pt = { t:r1(t), bt:r1(bt) }; if(et != null) pt.et = r1(et);
+        out.push(pt);
+      }
+      out.sort((a, b) => a.t - b.t);
+      for(let i = 1; i < out.length; i++) if(Math.abs(out[i].t - out[i - 1].t) < 0.5){ toast(`${fmt(out[i].t)} の点が重なっています`); return true; }
+      cur.points = out;
+      cur.undo = (cur.undo || []).filter(u => u.type !== 'pt');
+      if(where === 'roast'){ saveDraft(); renderRoast(); }
+      else { renderResult(); queueSave(); }
+      toast('記録点を保存しました');
+    }},
+  ]});
+}
+
+/* ---- event time editor (result) ---- */
+function openEvEdit(){
+  if(!cur) return;
+  const wrap = document.createElement('div'); wrap.className = 'edit-grid';
+  const ins = {};
+  EVENTS.forEach(e => {
+    const sp = document.createElement('span'); sp.textContent = e.label;
+    const i = mkInput('ev-' + e.k, cur.ev[e.k] != null ? fmt(cur.ev[e.k]) : '', e.k === 'drop' ? '必須 例 9:45' : '空欄で未記録');
+    ins[e.k] = i; wrap.append(sp, i);
+  });
+  openModal({ title:'ハゼ・排出の時刻を修正', text:'投入を0:00とした「分:秒」で入れてください。', node:wrap, actions:[
+    { label:'やめる' },
+    { label:'保存', cls:'primary', onClick: () => {
+      const ev = blankEv();
+      for(const e of EVENTS){
+        const v = ins[e.k].value.trim(); if(!v) continue;
+        const t = parseClock(v);
+        if(t == null || !isFinite(t) || t < 0){ toast(`${e.label}の時刻「${v}」が読めません（例 8:15）`); return true; }
+        ev[e.k] = r1(t);
+      }
+      if(ev.drop == null){ toast('排出の時刻は必須です'); return true; }
+      const w = evOrderWarnings(ev);
+      if(w.length){ toast(w[0]); return true; }
+      cur.ev = ev; renderResult(); queueSave(); toast('時刻を保存しました');
+    }},
+  ]});
+}
+
+/* ---- tasting notes ---- */
+const TASTE = [ { k:'bitter', label:'苦み' }, { k:'astr', label:'渋み' }, { k:'acid', label:'酸' }, { k:'sweet', label:'甘さ' }, { k:'fruit', label:'果実感' } ];
+const daysSince = iso => { const d = new Date(iso); const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()), n = new Date(); const b = new Date(n.getFullYear(), n.getMonth(), n.getDate()); return Math.max(0, Math.round((b - a) / 86400000)); };
+function renderTastings(){
+  const ul = $('tasteList'); ul.innerHTML = '';
+  const list = (cur.tastings || []).map((t, i) => ({ t, i })).sort((a, b) => a.t.day - b.t.day);
+  $('tasteEmpty').hidden = list.length > 0;
+  list.forEach(({ t, i }) => {
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'taste-item';
+    const top = document.createElement('div'); top.className = 'taste-top';
+    const h = document.createElement('b'); h.textContent = t.day === 0 ? '焙煎当日' : `${t.day}日目`;
+    const d = document.createElement('span'); d.textContent = t.date ? dateLabel(t.date).split(' ')[0] : '';
+    top.append(h, d); b.appendChild(top);
+    const scored = TASTE.filter(x => t[x.k] != null);
+    if(scored.length){
+      const tags = document.createElement('div'); tags.className = 'taste-tags';
+      scored.forEach(x => { const sp = document.createElement('span'); sp.textContent = `${x.label} ${t[x.k]}`; if(t[x.k] >= 4 && (x.k === 'bitter' || x.k === 'astr')) sp.className = 'hi'; tags.appendChild(sp); });
+      b.appendChild(tags);
+    }
+    if(t.note){ const n = document.createElement('div'); n.className = 'taste-note'; n.textContent = t.note; b.appendChild(n); }
+    b.onclick = () => openTaste(i);
+    li.appendChild(b); ul.appendChild(li);
+  });
+}
+function openTaste(idx){
+  const isNew = idx == null;
+  const t = isNew ? { day:daysSince(cur.date), date:new Date().toISOString(), note:'' } : clone(cur.tastings[idx]);
+  const wrap = document.createElement('div');
+  const day = mkInput('tasteDay', t.day, '日', 'numeric');
+  wrap.appendChild(mkField('焙煎後', day));
+  TASTE.forEach(x => {
+    const row = document.createElement('div'); row.className = 'score-row';
+    const sp = document.createElement('span'); sp.textContent = x.label;
+    const seg = document.createElement('div'); seg.className = 'score-seg';
+    const paint = () => [...seg.children].forEach(bt => bt.classList.toggle('on', Number(bt.dataset.v) === t[x.k]));
+    for(let v = 0; v <= 5; v++){
+      const bt = document.createElement('button'); bt.textContent = String(v); bt.dataset.v = v; bt.setAttribute('aria-label', `${x.label} ${v}`);
+      bt.onclick = () => { t[x.k] = t[x.k] === v ? null : v; paint(); };
+      seg.appendChild(bt);
+    }
+    paint(); row.append(sp, seg); wrap.appendChild(row);
+  });
+  const note = document.createElement('textarea'); note.id = 'tasteNote'; note.className = 'note-in'; note.value = t.note || ''; note.placeholder = '抽出方法、気づいたこと';
+  const nl = document.createElement('label'); nl.className = 'field col'; const ns = document.createElement('span'); ns.textContent = 'メモ'; nl.append(ns, note);
+  wrap.appendChild(nl);
+  const save = { label:'保存', cls:'primary', onClick: () => {
+    const dv = parseInt(day.value, 10);
+    if(!isFinite(dv) || dv < 0){ toast('焙煎後の日数を0以上で入れてください'); return true; }
+    t.day = dv; t.note = note.value.trim();
+    if(isNew) cur.tastings.push(t); else cur.tastings[idx] = t;
+    renderTastings(); renderDiag(); queueSave(); toast('味の記録を保存しました');
+  }};
+  const actions = isNew ? [{ label:'やめる' }, save] : [{ label:'削除', cls:'danger', onClick: () => { cur.tastings.splice(idx, 1); renderTastings(); renderDiag(); queueSave(); toast('削除しました'); } }, save];
+  openModal({ title:isNew ? '味を記録' : '味の記録を編集', text:'0〜5で記録します。もう一度押すと未記入に戻ります。', node:wrap, actions });
+}
+
+/* ---- CSV / Artisan import as a roast log ---- */
+function parseRoastLogCSV(text, filename){
+  const raw = String(text || '').replace(/^﻿/, '');
+  const lines = raw.split(/\r?\n/).filter(x => x.trim() !== '');
+  if(!lines.length) throw new Error('中身が空です');
+  const warns = [], meta = {};
+  const pts = [], ops = [], evAt = {};
+  let charge = null;
+  const evKey = label => {
+    const z = String(label || '').trim().toLowerCase();
+    if(!z) return null;
+    if(z === 'charge' || z === '投入') return 'charge';
+    if(z === 'tp' || z === '中点') return 'tp';
+    if(z.includes('yellow') || z.includes('イエロー') || z.includes('dry end') || z === 'drye') return 'yellow';
+    if(z.includes('1c end') || z.includes('1ハゼ終') || z === 'fce') return 'fce';
+    if(z.includes('1c start') || z === '1ハゼ' || z === 'fcs' || z === '1c') return 'fc';
+    if(z.includes('2c') || z.includes('2ハゼ') || z === 'scs') return 'sc';
+    if(z.includes('drop') || z.includes('排出')) return 'drop';
+    return null;
+  };
+  const putEv = (k, t) => { if(k === 'tp' || t == null || !isFinite(t)) return; if(k === 'charge'){ if(charge == null) charge = t; return; } if(evAt[k] == null) evAt[k] = t; };
+  let fmtName = '';
+  if(/^date:/i.test(lines[0]) && lines[0].includes('\t')){
+    fmtName = 'Artisan';
+    const head = lines[0].split('\t');
+    const dm = (head.find(h => /^date:/i.test(h)) || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    const tm = (head.find(h => /^time:/i.test(h)) || '').match(/(\d{1,2}):(\d{2})/);
+    if(dm) meta.date = new Date(Number(dm[3]), Number(dm[2]) - 1, Number(dm[1]), tm ? Number(tm[1]) : 12, tm ? Number(tm[2]) : 0).toISOString();
+    const hi = lines.findIndex(l => /^time1\t/i.test(l));
+    if(hi < 0) throw new Error('Artisanの列見出しが見つかりません');
+    const cols = lines[hi].split('\t').map(x => x.trim().toLowerCase());
+    const it = cols.indexOf('time2') >= 0 ? cols.indexOf('time2') : 0, ie = cols.indexOf('et'), ib = cols.indexOf('bt'), iev = cols.indexOf('event');
+    for(let i = hi + 1; i < lines.length; i++){
+      const a = lines[i].split('\t'); const t = parseClock(a[it]);
+      if(t == null || !isFinite(t)) continue;
+      const bt = parseFloat(a[ib]), et = ie >= 0 ? parseFloat(a[ie]) : NaN;
+      if(validTemp(bt) && bt !== -1){ const p = { t, bt }; if(validTemp(et)) p.et = et; pts.push(p); }
+      if(iev >= 0) putEv(evKey(a[iev]), t);
+    }
+  } else {
+    lines.forEach(ln => {
+      if(!ln.startsWith('# ')) return;
+      const a = parseCsvRow(ln.slice(2)); const k = (a[0] || '').trim(), v = (a[1] || '').trim();
+      if(k === '豆') meta.bean = v;
+      else if(k === '日時' && v){ const d = new Date(v.replace(' ', 'T')); if(!isNaN(d)) meta.date = d.toISOString(); }
+      else if(k === '生豆(g)') meta.green = num(v);
+      else if(k === '焙煎後(g)') meta.roasted = num(v);
+      else if(k === '生豆の水分(%)' && v) meta.moisture = parseFloat(v);
+      else if(k === '生豆の密度(g/L)' && v) meta.density = parseFloat(v);
+      else if(k === '焙煎度(色値)' && v) meta.color = parseFloat(v);
+      else if(k === '評価') meta.rating = Math.max(0, Math.min(5, parseInt(v, 10) || 0));
+      else if(k === 'メモ') meta.note = v;
+    });
+    const hi = lines.findIndex(ln => /^\s*"?time_sec"?\s*,/i.test(ln));
+    if(hi < 0) throw new Error('time_sec の列が見つかりません');
+    const head = parseCsvRow(lines[hi]).map(x => x.trim().toLowerCase());
+    const it = head.indexOf('time_sec');
+    let ib = head.indexOf('bt'); const isApp = ib >= 0;
+    if(ib < 0) ib = head.indexOf('temp_c');
+    const ie = head.indexOf('et'), iev = head.indexOf('event');
+    if(ib < 0) throw new Error('温度の列が見つかりません');
+    fmtName = isApp ? 'このアプリ' : 'Mini';
+    for(let i = hi + 1; i < lines.length; i++){
+      const a = parseCsvRow(lines[i]); const t = parseFloat(a[it]);
+      if(!isFinite(t)) continue;
+      const label = iev >= 0 ? (a[iev] || '').trim() : '';
+      const opm = label.match(/^(火力|風量)=(\d+(?:\.\d+)?)$/);
+      if(opm){ ops.push({ t, type:opm[1] === '火力' ? 'heat' : 'air', v:Number(opm[2]) }); continue; }
+      const k = evKey(label);
+      const bt = parseFloat(a[ib]), et = ie >= 0 ? parseFloat(a[ie]) : NaN;
+      // In this app's CSV, event rows carry interpolated temperatures, so only plain rows become points.
+      if(validTemp(bt) && !(isApp && k)){ const p = { t, bt }; if(validTemp(et)) p.et = et; pts.push(p); }
+      putEv(k, t);
+    }
+  }
+  const off = charge != null && charge > 0 ? charge : 0;
+  if(off) warns.push(`投入を0:00に合わせ、全体を${off.toFixed(1)}秒前へずらしました。`);
+  const sh = t => r1(t - off);
+  const points = sortPts(pts.filter(p => p.t >= off - 0.5).map(p => { const q = { t:Math.max(0, sh(p.t)), bt:p.bt }; if(isFinite(p.et)) q.et = p.et; return q; }));
+  const dedup = [];
+  points.forEach(p => { if(dedup.length && Math.abs(dedup[dedup.length - 1].t - p.t) < 0.5) dedup[dedup.length - 1] = p; else dedup.push(p); });
+  const withEt = pts.filter(p => isFinite(p.et));
+  dedup.forEach(p => { const src = withEt.find(q => Math.abs(sh(q.t) - p.t) < 0.5); if(src) p.et = src.et; });
+  if(dedup.length < 2) throw new Error('温度の記録が2点以上必要です');
+  const ev = blankEv();
+  Object.keys(evAt).forEach(k => { ev[k] = sh(evAt[k]); });
+  if(ev.fc != null && ev.fce != null && ev.fce < ev.fc){
+    warns.push(`1ハゼ終（${fmt(ev.fce)}）が1ハゼ（${fmt(ev.fc)}）より前だったため、1ハゼ終を外しました。`);
+    ev.fce = null;
+  }
+  evOrderWarnings(ev).forEach(w => warns.push(w));
+  if(ev.drop == null){ ev.drop = dedup[dedup.length - 1].t; warns.push(`排出の記録がないため、最後の記録点（${fmt(ev.drop)}）を排出にしました。`); }
+  const fn = String(filename || '').replace(/\.(csv|txt)$/i, '');
+  if(!meta.bean){
+    const m = fn.match(/^roast[_-]?(.+?)[_-](\d{4}-\d{2}-\d{2})/i);
+    meta.bean = (m ? m[1] : fn.replace(/^roast[_-]?/i, '')).replace(/[_　]+/g, ' ').trim();
+  }
+  if(!meta.date){
+    const m = fn.match(/(\d{4})-(\d{2})-(\d{2})/);
+    meta.date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0).toISOString() : new Date().toISOString();
+    if(m) warns.push('焙煎時刻が不明なため、日付の12:00としました。');
+  }
+  let h = 0; for(let i = 0; i < raw.length; i++) h = (h * 31 + raw.charCodeAt(i)) >>> 0;
+  const r = normRoast({
+    id:'rcsv-' + h.toString(36), date:meta.date, bean:meta.bean || '', green:meta.green ?? null, roasted:meta.roasted ?? null,
+    moisture:meta.moisture ?? null, density:meta.density ?? null, color:meta.color ?? null, note:meta.note || '', rating:meta.rating || 0,
+    target:null, interval:prefs.interval, channels:dedup.some(p => isFinite(p.et)) ? 'bt+et' : 'bt', t0:null,
+    points:dedup, ops:ops.map(o => ({ t:Math.max(0, sh(o.t)), type:o.type, v:o.v })), ev, undo:[], tastings:[], machine:'',
+  });
+  return { roast:r, warns, fmtName };
+}
+$('importLogBtn').onclick = () => $('importLogFile').click();
+$('importLogFile').addEventListener('change', async e => {
+  const files = [...(e.target.files || [])]; e.target.value = '';
+  if(!files.length) return;
+  const added = [], msgs = [];
+  for(const f of files){
+    try{
+      const { roast, warns } = parseRoastLogCSV(await f.text(), f.name);
+      if(roasts.some(x => x.id === roast.id)){ msgs.push(`${f.name}：読み込み済みのため飛ばしました。`); continue; }
+      upsertRoast(roast); added.push(roast);
+      if(warns.length) msgs.push(`${roast.bean || f.name}：${warns.join(' ')}`);
+    }catch(err){ msgs.push(`${f.name}：${err.message}`); }
+  }
+  if(added.length && !await persistRoasts()){ toast('保存できませんでした'); return; }
+  homeTab = 'roasts'; renderHome();
+  if(added.length === 1 && !msgs.length){ openResult(clone(added[0])); toast('焙煎記録として読み込みました'); return; }
+  const node = document.createElement('div');
+  msgs.forEach(m => { const p = document.createElement('p'); p.textContent = m; node.appendChild(p); });
+  openModal({ title:`${added.length}件を読み込みました`, node, actions:added.length === 1
+    ? [{ label:'閉じる' }, { label:'記録を開く', cls:'primary', onClick: () => openResult(clone(added[0])) }]
+    : [{ label:'閉じる' }] });
+});
+
+/* ---- backup restore from file ---- */
+async function mergeBackup(data){
+  const inR = Array.isArray(data) ? data : data && Array.isArray(data.roasts) ? data.roasts : null;
+  const inP = data && Array.isArray(data.profiles) ? data.profiles : [];
+  if(!inR) return null;
+  let nr = 0, np = 0;
+  inR.forEach(r => { if(r && r.id && Array.isArray(r.points) && !roasts.some(x => x.id === r.id)){ roasts.push(normRoast(r)); nr++; } });
+  inP.forEach(p => { if(p && p.id && Array.isArray(p.points) && !profiles.some(x => x.id === p.id)){ profiles.push(p); np++; } });
+  const ok = (await persistRoasts()) && (await persistProfiles());
+  return { ok, nr, np };
+}
+$('restoreFileBtn').onclick = () => $('restoreFile').click();
+$('restoreFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if(!f) return;
+  const res = await mergeBackup(safeParse(await f.text(), null));
+  if(!res){ toast('バックアップのJSONとして読めませんでした'); return; }
+  if(!res.ok){ toast('保存できませんでした'); return; }
+  renderHome(); toast(`焙煎${res.nr}件、ターゲット${res.np}件を追加しました`);
+});
+
+$('beanChip').onclick = openRoastInfo;
+$('ptEditChip').onclick = () => openPtEdit('roast');
+$('editPtBtn').onclick = () => openPtEdit('result');
+$('editEvBtn').onclick = openEvEdit;
+$('addTaste').onclick = () => openTaste(null);
+$('timeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prefs.timeMode = b.dataset.v; savePrefs(); renderHome(); });
+
+/* ================= v8: goals, diagnosis, AI advice ================= */
+const LEVELS = [
+  { k:'light',    label:'浅煎り',   desc:'果実感と明るい酸。1ハゼの途中で排出',        dtr:[12, 16], loss:[11.5, 13.5], dev:[55, 95] },
+  { k:'medlight', label:'中浅煎り', desc:'酸と甘さのバランス。1ハゼが終わる前後',      dtr:[15, 19], loss:[13, 15],     dev:[70, 115] },
+  { k:'medium',   label:'中煎り',   desc:'甘さとコク。1ハゼが終わって少し後',          dtr:[18, 22], loss:[14, 16],     dev:[90, 140] },
+  { k:'meddark',  label:'中深煎り', desc:'ビター寄りのコク。2ハゼの直前まで',          dtr:[20, 25], loss:[15.5, 18],   dev:[120, 180] },
+  { k:'dark',     label:'深煎り',   desc:'苦みとボディ。2ハゼに入ってから',            dtr:[22, 28], loss:[17, 20],     dev:[150, 240] },
+];
+const FLAVORS = [
+  { k:'fruit', label:'果実感' }, { k:'acid', label:'明るい酸' }, { k:'sweet', label:'甘さ' }, { k:'clean', label:'クリーンさ' },
+  { k:'body', label:'コク・ボディ' }, { k:'choco', label:'チョコ・ナッツ' }, { k:'bitter', label:'しっかりした苦み' },
+];
+const AVOIDS = [
+  { k:'astr', label:'渋み' }, { k:'bitter', label:'焦げた苦み' }, { k:'sour', label:'尖った酸' }, { k:'grassy', label:'青臭さ' }, { k:'flat', label:'平板・香りが弱い' },
+];
+const BREWS = [
+  { k:'espresso', label:'エスプレッソ', desc:'ストレート中心' },
+  { k:'milk', label:'ミルク系', desc:'ラテ・カプチーノ' },
+  { k:'filter', label:'ハンドドリップ', desc:'フィルター・浸漬' },
+  { k:'both', label:'いろいろ', desc:'エスプレッソもドリップも' },
+];
+const MACHINES = [
+  { k:'drum-direct', label:'直火ドラム', desc:'炎でドラムを焼く。蓄熱が大きく反応が遅い', lag:75 },
+  { k:'drum-semi', label:'半熱風ドラム', desc:'熱風と伝導。業務用に多い', lag:60 },
+  { k:'ih', label:'電熱・IHドラム', desc:'Aillio Bulletなど', lag:50 },
+  { k:'hotair', label:'熱風式', desc:'流動層など。反応が速い', lag:30 },
+  { k:'manual', label:'手網・手回し', desc:'コンロで直接あおる', lag:40 },
+  { k:'other', label:'その他', desc:'上のどれでもない', lag:60 },
+];
+const PROBES = [
+  { k:'bt', label:'豆温度プローブ', desc:'豆の山に差したセンサー' },
+  { k:'touch', label:'豆に直接当てる', desc:'回る豆に温度計を当てて読む' },
+  { k:'exhaust', label:'排気・熱風の温度', desc:'豆以外の温度を測っている' },
+  { k:'none', label:'測っていない', desc:'時間と音・色で判断' },
+];
+const lab = (list, k) => (list.find(x => x.k === k) || {}).label || '';
+const DEFAULT_GOAL = { done:false, skipped:false, level:'', flavors:[], avoid:[], brew:'', machine:'', probe:'', batch:'', machineName:'' };
+function ensureGoal(){
+  prefs.goal = Object.assign(clone(DEFAULT_GOAL), prefs.goal || {});
+  ['flavors', 'avoid'].forEach(k => { if(!Array.isArray(prefs.goal[k])) prefs.goal[k] = []; });
+  prefs.ai = Object.assign({ key:'', model:'claude-sonnet-5-5' }, prefs.ai || {});
+}
+function goalTargets(g){
+  g = g || prefs.goal || {};
+  const L = LEVELS.find(x => x.k === g.level) || LEVELS[1];
+  const M = MACHINES.find(x => x.k === g.machine) || MACHINES[5];
+  let dtr = L.dtr.slice();
+  const lightish = L.k === 'light' || L.k === 'medlight';
+  // エスプレッソやミルク向けの浅〜中浅は、抽出しやすさのため発達を少しだけ長めに取る
+  if(lightish && (g.brew === 'espresso' || g.brew === 'milk')) dtr = [dtr[0] + 1, dtr[1] + 1];
+  const total = M.k === 'hotair' ? [330, 600] : M.k === 'manual' ? [480, 900] : [480, 780];
+  return { L, M, dtr, dev:L.dev, loss:L.loss, total, mai:[20, 38], dry:[35, 55], lag:M.lag, lightish, probeAbs:g.probe === 'bt' };
+}
+function goalLine(g){
+  g = g || prefs.goal;
+  if(!g.level) return '';
+  const parts = [lab(LEVELS, g.level)];
+  if(g.flavors.length) parts.push(g.flavors.map(k => lab(FLAVORS, k)).join('・'));
+  if(g.brew) parts.push(lab(BREWS, g.brew));
+  return parts.join(' / ');
+}
+function renderGoalCard(){
+  if(!prefs.goal) ensureGoal();
+  const g = prefs.goal, t = $('goalTxt'); t.innerHTML = '';
+  if(g.level){
+    const T = goalTargets(g);
+    const b = document.createElement('b'); b.textContent = goalLine(g);
+    t.append(b, document.createElement('br'), document.createTextNode(`目安 DTR ${T.dtr[0]}〜${T.dtr[1]}%・重量減少 ${T.loss[0]}〜${T.loss[1]}%${g.machine ? '・' + lab(MACHINES, g.machine) : ''}`));
+  } else {
+    const b = document.createElement('b'); b.textContent = '好みの焙煎が未設定です';
+    t.append(b, document.createElement('br'), document.createTextNode('設定すると、焙煎ごとの診断が目指す味に合わせて変わります。'));
+  }
+}
+$('goalBtn').onclick = () => openOnboard(false);
+$('diagGoalBtn').onclick = () => openOnboard(false, 'result');
+
+/* ---- onboarding ---- */
+let ob = null;
+const OB_STEPS = 5;
+function openOnboard(first, back){
+  ob = { step:0, first:!!first, back:back || 'home', g:clone(prefs.goal), key:prefs.ai.key || '' };
+  if(!ob.g.machineName && prefs.machine) ob.g.machineName = prefs.machine;
+  $('obSkip').hidden = !first;
+  show('onboard'); obRender();
+}
+function choiceGrid(list, val, onPick, cls){
+  const box = document.createElement('div'); box.className = 'choices' + (cls ? ' ' + cls : '');
+  list.forEach(it => {
+    const b = document.createElement('button'); b.className = 'choice' + (val === it.k ? ' on' : '');
+    b.setAttribute('aria-pressed', val === it.k ? 'true' : 'false');
+    const t = document.createElement('b'); t.textContent = it.label; b.appendChild(t);
+    if(it.desc){ const d = document.createElement('span'); d.textContent = it.desc; b.appendChild(d); }
+    b.onclick = () => { onPick(it.k); obRender(); };
+    box.appendChild(b);
+  });
+  return box;
+}
+function chipSet(list, arr, max, avoid){
+  const box = document.createElement('div'); box.className = 'chips';
+  list.forEach(it => {
+    const on = arr.includes(it.k);
+    const b = document.createElement('button'); b.className = 'chip' + (avoid ? ' avoid' : '') + (on ? ' on' : ''); b.textContent = it.label;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.onclick = () => {
+      const i = arr.indexOf(it.k);
+      if(i >= 0) arr.splice(i, 1);
+      else { if(max && arr.length >= max){ toast(`選べるのは${max}つまでです`); return; } arr.push(it.k); }
+      obRender();
+    };
+    box.appendChild(b);
+  });
+  return box;
+}
+function obQ(text, small){ const q = document.createElement('p'); q.className = 'ob-q'; q.textContent = text; if(small){ const s = document.createElement('small'); s.textContent = small; q.appendChild(s); } return q; }
+function obRender(){
+  const g = ob.g, body = $('obBody'); body.innerHTML = '';
+  const st = $('obSteps'); st.innerHTML = '';
+  for(let i = 0; i < OB_STEPS; i++){ const d = document.createElement('i'); if(i <= ob.step) d.className = 'on'; st.appendChild(d); }
+  const h = document.createElement('h2'), lead = document.createElement('p'); lead.className = 'ob-lead';
+  body.append(h, lead);
+  let ready = true;
+  if(ob.step === 0){
+    h.textContent = 'どんな焙煎が好きですか';
+    lead.textContent = '目指す焙煎度から、発達時間や重量減少の目安を決めます。あとから変えられます。';
+    body.appendChild(choiceGrid(LEVELS, g.level, k => { g.level = k; }));
+    ready = !!g.level;
+  } else if(ob.step === 1){
+    h.textContent = 'どんな味を目指しますか';
+    lead.textContent = '診断のとき、記録した味とこの目標のズレを見ます。';
+    body.append(obQ('出したい味', '3つまで'), chipSet(FLAVORS, g.flavors, 3), obQ('避けたい味', 'いくつでも'), chipSet(AVOIDS, g.avoid, 0, true));
+  } else if(ob.step === 2){
+    h.textContent = 'どう飲みますか';
+    lead.textContent = 'エスプレッソやミルク向けの浅煎りは、少しだけ発達を長めに見ます。';
+    body.appendChild(choiceGrid(BREWS, g.brew, k => { g.brew = k; }, 'two'));
+  } else if(ob.step === 3){
+    h.textContent = '焙煎機と温度計';
+    lead.textContent = '火を下げるタイミングと、温度の数字をどこまで信用するかが変わります。';
+    body.append(obQ('焙煎機の方式'), choiceGrid(MACHINES, g.machine, k => { g.machine = k; }, 'two'), obQ('温度の測り方'), choiceGrid(PROBES, g.probe, k => { g.probe = k; }, 'two'));
+    const name = mkInput('obMachineName', g.machineName, '例：直火ドラム500g（個人製作）');
+    name.addEventListener('input', () => { g.machineName = name.value; });
+    const batch = mkInput('obBatch', g.batch, 'g', 'decimal');
+    batch.addEventListener('input', () => { g.batch = batch.value; });
+    const wrap = document.createElement('div'); wrap.style.cssText = 'display:grid;gap:10px;margin-top:18px';
+    wrap.append(mkField('機種メモ', name), mkField('いつもの量', batch));
+    body.appendChild(wrap);
+  } else {
+    const T = goalTargets(g);
+    h.textContent = 'この目安で診断します';
+    lead.textContent = '一般的な目安です。焙煎機や豆で変わるので、記録が増えたら自分の好みに合わせて調整してください。';
+    const sum = document.createElement('div'); sum.className = 'ob-sum';
+    const row = (k, v) => { const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('b'); a.textContent = k; b.textContent = v; d.append(a, b); sum.appendChild(d); };
+    row('焙煎度', T.L.label);
+    row('DTR（発達の比率）', `${T.dtr[0]}〜${T.dtr[1]}%`);
+    row('発達時間', `${fmt(T.dev[0])}〜${fmt(T.dev[1])}`);
+    row('重量減少', `${T.loss[0]}〜${T.loss[1]}%`);
+    row('総時間', `${fmt(T.total[0])}〜${fmt(T.total[1])}`);
+    row('火を下げる目安', `1ハゼの約${T.lag}秒前`);
+    body.appendChild(sum);
+    if(g.probe && g.probe !== 'bt'){
+      const n = document.createElement('p'); n.className = 'ob-note';
+      n.textContent = '豆温度プローブ以外の測り方では、温度の数字が一般的な豆温度とずれます。診断は時間・比率・重量減少を中心に行います。';
+      body.appendChild(n);
+    }
+    const det = document.createElement('details'); det.className = 'ob-ai';
+    const su = document.createElement('summary'); su.textContent = 'AIアドバイスの設定（任意）';
+    const p = document.createElement('p'); p.className = 'ob-note';
+    p.textContent = 'claude.aiで開いている場合は設定不要です。ホーム画面に追加したアプリでAIに聞くには、AnthropicのAPIキーを入れます。キーはこの端末にだけ保存され、AnthropicのAPIへの送信にだけ使います。未設定でも「相談用にコピー」でClaudeアプリに貼り付けて聞けます。';
+    const key = mkInput('obApiKey', ob.key, 'sk-ant-…'); key.type = 'password';
+    key.addEventListener('input', () => { ob.key = key.value.trim(); });
+    det.append(su, p, mkField('APIキー', key));
+    if(ob.key) det.open = false;
+    body.appendChild(det);
+  }
+  $('obPrev').textContent = ob.step === 0 ? (ob.first ? 'あとで' : 'やめる') : '戻る';
+  $('obNext').textContent = ob.step === OB_STEPS - 1 ? (ob.first ? 'はじめる' : '保存') : '次へ';
+  $('obNext').disabled = !ready;
+}
+async function obFinish(skipped){
+  if(skipped){ prefs.goal.skipped = true; }
+  else {
+    const g = ob.g;
+    g.done = true; g.skipped = false;
+    g.machineName = (g.machineName || '').trim();
+    g.batch = num(g.batch) ? String(num(g.batch)) : '';
+    prefs.goal = g;
+    prefs.ai.key = ob.key || '';
+    if(g.machineName) prefs.machine = g.machineName;
+    else if(g.machine && !prefs.machine) prefs.machine = lab(MACHINES, g.machine);
+  }
+  await savePrefs();
+  const back = ob.back; ob = null;
+  if(back === 'result' && cur){ show('result'); renderResult(); }
+  else { show('home'); renderHome(); if(!skipped && !$('greenIn').value && prefs.goal.batch) $('greenIn').value = prefs.goal.batch; }
+  if(!skipped) toast('好みと機材を保存しました');
+}
+$('obNext').onclick = () => { if(ob.step < OB_STEPS - 1){ ob.step++; obRender(); window.scrollTo(0, 0); } else obFinish(false); };
+$('obPrev').onclick = () => {
+  if(ob.step > 0){ ob.step--; obRender(); window.scrollTo(0, 0); return; }
+  if(ob.first) obFinish(true);
+  else { const back = ob.back; ob = null; if(back === 'result' && cur){ show('result'); renderResult(); } else { show('home'); renderHome(); } }
+};
+$('obSkip').onclick = () => obFinish(true);
+
+/* ---- diagnosis ---- */
+const beanKey = s => String(s || '').replace(/[\s　・\-_]/g, '').toLowerCase();
+function latestTaste(r){
+  const ts = (r.tastings || []).slice().sort((a, b) => a.day - b.day);
+  return ts.length ? ts[ts.length - 1] : null;
+}
+function prevSameBean(r){
+  const k = beanKey(r.bean); if(!k) return null;
+  return roasts.filter(x => x.id !== r.id && beanKey(x.bean) === k && x.date < r.date).sort((a, b) => a.date < b.date ? 1 : -1)[0] || null;
+}
+function diagnose(r){
+  if(!prefs.goal) ensureGoal();
+  const g = prefs.goal, T = goalTargets(g), A = analyze(r), e = r.ev || {};
+  const F = [], add = (lv, t, d, w) => F.push({ lv, t, d:d || '', w:w || 0 });
+  const fc = e.fc, drop = e.drop, ye = e.yellow;
+  const mai = A.phases.find(p => p.k === 'mai'), dry = A.phases.find(p => p.k === 'dry');
+  const tl = latestTaste(r), sc = k => tl && tl[k] != null ? tl[k] : null;
+  const wants = k => g.flavors.includes(k), avoids = k => g.avoid.includes(k);
+  let under = 0, over = 0, stall = false, flick = false, scorch = false;
+  const shortMai = !!(mai && mai.pct != null && mai.pct < T.mai[0]);
+  const longDry = !!(dry && dry.pct != null && dry.pct > T.dry[1]);
+
+  const meters = [];
+  if(A.dtr != null) meters.push({ label:'DTR', v:A.dtr, band:T.dtr, min:0, max:32, txt:`${A.dtr.toFixed(1)}%` });
+  if(A.devT != null) meters.push({ label:'発達時間', v:A.devT, band:T.dev, min:0, max:270, txt:fmt(A.devT) });
+  if(mai && mai.pct != null) meters.push({ label:'メイラード', v:mai.pct, band:T.mai, min:0, max:50, txt:`${mai.pct.toFixed(0)}%` });
+  if(drop != null) meters.push({ label:'総時間', v:drop, band:T.total, min:240, max:1080, txt:fmt(drop) });
+  if(A.loss != null) meters.push({ label:'重量減少', v:A.loss, band:T.loss, min:6, max:24, txt:`${A.loss.toFixed(1)}%` });
+
+  if(fc == null || drop == null) add('info', '1ハゼと排出の時刻が必要です', '「イベント時刻を修正」で入れると、発達とDTRを診断できます。', 100);
+  evOrderWarnings(e).forEach(w => add('warn', 'イベントの順番がおかしい', w, 95));
+
+  if(A.dtr != null){
+    const dv = `発達 ${fmt(A.devT)}`;
+    if(A.dtr < T.dtr[0]){ under += 2; add('warn', `発達が短い（DTR ${A.dtr.toFixed(1)}%・${dv}）`, `${T.L.label}の目安は${T.dtr[0]}〜${T.dtr[1]}%。芯まで火が通りきらず、渋み・青さ・尖った酸が出やすい配分です。`, 70); }
+    else if(A.dtr > T.dtr[1]){ over += 2; add('warn', `発達が長い（DTR ${A.dtr.toFixed(1)}%・${dv}）`, `${T.L.label}の目安は${T.dtr[0]}〜${T.dtr[1]}%。香りが飛び、苦みが前に出やすくなります。`, 65); }
+    else add('ok', `DTR ${A.dtr.toFixed(1)}%は目安の範囲内`, `${T.L.label}の目安 ${T.dtr[0]}〜${T.dtr[1]}%`, 1);
+  }
+  if(A.loss != null){
+    if(A.loss < T.loss[0]){ under += 1; add('warn', `重量減少が少ない（${A.loss.toFixed(1)}%）`, `${T.L.label}の目安は${T.loss[0]}〜${T.loss[1]}%。焙煎度が浅めに出ています。`, 55); }
+    else if(A.loss > T.loss[1]){ over += 1; add('warn', `重量減少が多い（${A.loss.toFixed(1)}%）`, `${T.L.label}の目安は${T.loss[0]}〜${T.loss[1]}%。焙煎度が深めに出ています。`, 50); }
+    else add('ok', `重量減少 ${A.loss.toFixed(1)}%は目安の範囲内`, '', 1);
+  } else if(drop != null) add('info', '焙煎後の重さを量ってください', '重量減少は焙煎機や温度計に関係なく焙煎度を比べられる、いちばん確かな指標です。', 12);
+
+  if(fc != null && A.ror.length >= 4){
+    const pre = A.ror.filter(x => x.t >= fc - 180 && x.t <= fc - 20), near = A.ror.filter(x => x.t > fc - 20 && x.t <= fc + 20);
+    if(pre.length && near.length){
+      const minPre = Math.min(...pre.map(x => x.v)), atFc = Math.max(...near.map(x => x.v));
+      if(atFc - minPre >= 3){ flick = true; scorch = true; add('warn', '1ハゼ直前にRoRが上がっている', `下がっていたRoRが1ハゼ付近で約${(atFc - minPre).toFixed(0)}℃/分戻っています。火が強いまま1ハゼに入ると、表面が焦げて苦みが出やすくなります。`, 58); }
+    }
+  }
+  const devPh = A.phases.find(p => p.k === 'dev');
+  if(devPh && ((devPh.avg != null && devPh.avg <= 2) || (A.devRise != null && A.devRise <= 1))){
+    stall = true; under += 1;
+    add('warn', `発達中に温度が上がっていない（${A.devRise != null ? (A.devRise >= 0 ? '+' : '') + A.devRise.toFixed(0) + '℃' : '停滞'}）`,
+      '1ハゼ後に熱が足りず停滞すると、ベイクド気味の平板さや渋みの原因になります。' + (T.probeAbs ? '' : '測り方によっては温度計の読みが頭打ちになっているだけの場合もあります。'), 56);
+  }
+  if(shortMai) add('warn', `メイラードが短い（${mai.pct.toFixed(0)}%・${fmt(mai.dur)}）`, '甘さや厚みが乗りにくい配分です。イエローを早めて、1ハゼまでの時間を確保すると改善しやすいです。', 45);
+  else if(mai && mai.pct != null && mai.pct > T.mai[1]) add('info', `メイラードが長め（${mai.pct.toFixed(0)}%）`, '甘さは出やすい一方、酸や香りがぼやけることがあります。', 20);
+  if(longDry) add('warn', `前半が長い（ドライ ${dry.pct.toFixed(0)}%・イエロー ${fmt(ye)}）`, '初期の熱量が足りず、後半に詰め込む配分になっています。投入温度か初期火力を上げる余地があります。', 44);
+  if(drop != null && drop > T.total[1]) add('warn', `総時間が長い（${fmt(drop)}）`, 'ベイクド気味の平板な味になりやすい長さです。', 40);
+  else if(drop != null && drop < T.total[0]) add('info', `総時間が短い（${fmt(drop)}）`, '芯残りが出ていないか、豆を割って中の色を見てください。', 25);
+
+  if(tl){
+    const dayTxt = tl.day === 0 ? '当日' : `${tl.day}日目`;
+    if(sc('astr') != null && sc('astr') >= 3){ under += 2; add('warn', `渋みが強い（${sc('astr')}/5・${dayTxt}）`, '発達不足か、発達中の停滞が典型的な原因です。', 75); }
+    if(sc('bitter') != null && sc('bitter') >= 3 && !wants('bitter')){ over += 1; scorch = true; add('warn', `苦みが強い（${sc('bitter')}/5・${dayTxt}）`, '1ハゼ前の火が強い（表面の焦げ）か、発達の長すぎが原因になりやすいです。', 70); }
+    if(sc('acid') != null && sc('acid') >= 4 && (sc('sweet') == null || sc('sweet') <= 2)){ under += 1; add('warn', '酸が尖って甘さが足りない', '発達かメイラードが短いときのサインです。', 60); }
+    if(wants('fruit') && sc('fruit') != null && sc('fruit') <= 2) add('info', `果実感が弱い（${sc('fruit')}/5）`, over >= under ? '発達を短めにして香りを残す方向が合います。' : 'まず渋み・酸の尖りを取り、そのうえで発達を詰めすぎないようにします。', 35);
+    if(wants('sweet') && sc('sweet') != null && sc('sweet') <= 2) add('info', `甘さが弱い（${sc('sweet')}/5）`, 'メイラードを延ばすと甘さが乗りやすくなります。', 34);
+    if((wants('body') || wants('choco')) && over === 0 && T.lightish === false && sc('sweet') != null && sc('sweet') <= 2) add('info', 'コクが足りない', '発達を10〜20秒延ばすとコクが出やすくなります。', 30);
+    if(tl.day < 3 && T.lightish) add('info', `焙煎${dayTxt}の評価です`, '浅〜中浅煎りは3〜7日休ませると渋みや尖りが落ち着きます。数日後の味も記録すると判断がぶれません。', 15);
+  } else if(drop != null) add('info', '味の記録がありません', '味を記録すると、目標とのズレから提案を絞れます。', 10);
+
+  if(!T.probeAbs && g.probe) add('info', '温度の数字は他の焙煎機と比べない', `「${lab(PROBES, g.probe)}」測り方では、一般的な豆温度とずれて出ます。同じ測り方の自分の記録どうしで比べてください。`, 5);
+  else if(T.probeAbs && A.fcBT != null && (A.fcBT > 225 || A.fcBT < 180)) add('info', `1ハゼ時 ${Math.round(A.fcBT)}℃は豆温度としては珍しい値です`, 'プローブの位置や校正を確認してください。', 18);
+
+  const prev = prevSameBean(r);
+  if(prev){
+    const P = analyze(prev), pt = latestTaste(prev), bits = [];
+    if(P.dtr != null && A.dtr != null) bits.push(`DTR ${P.dtr.toFixed(1)}→${A.dtr.toFixed(1)}%`);
+    if(prev.ev && prev.ev.drop != null && drop != null) bits.push(`排出 ${fmt(prev.ev.drop)}→${fmt(drop)}`);
+    if(P.loss != null && A.loss != null) bits.push(`減少 ${P.loss.toFixed(1)}→${A.loss.toFixed(1)}%`);
+    if(pt && tl) TASTE.forEach(x => { if(pt[x.k] != null && tl[x.k] != null && pt[x.k] !== tl[x.k]) bits.push(`${x.label} ${pt[x.k]}→${tl[x.k]}`); });
+    if(bits.length) add('info', `同じ豆の前回（${dateLabel(prev.date).split(' ')[0]}）から`, bits.join('、'), 22);
+  }
+
+  const lag = T.lag, lagTxt = T.M.k === 'drum-direct' ? '直火ドラムは蓄熱で反応が遅れるので' : T.M.k === 'hotair' ? '熱風式は反応が速いので' : '火力の効きが遅れる分を見込んで';
+  const heatAt = fc != null ? `今回なら ${fmt(Math.max(0, fc - lag - 15))}〜${fmt(Math.max(0, fc - lag + 15))}` : '';
+  const dropFor = d => Math.round(fc / (1 - d / 100));
+  let plan = null;
+  if(fc != null && drop != null && !evOrderWarnings(e).length){
+    if(under > over && under >= 2){
+      const lo = T.dtr[0], hi = Math.min(T.dtr[1], lo + 3), d1 = dropFor(lo), d2 = dropFor(hi);
+      const steps = [`排出を 1ハゼ（今回 ${fmt(fc)}）から ${fmt(d1 - fc)}〜${fmt(d2 - fc)} 後にする → 排出 ${fmt(d1)}〜${fmt(d2)}（DTR ${lo}〜${hi}%）`];
+      if(stall || flick || T.M.k === 'drum-direct') steps.push(`${lagTxt}、1ハゼの約${lag}秒前（${heatAt}）に火を一段下げ、発達中も温度がゆっくり上がり続ける火力を保つ`);
+      steps.push('豆の量・投入温度・前半の火力は今回と同じにする');
+      plan = { title:'次回：発達を延ばす', steps, why:'渋み・尖った酸・発達不足のサインがいちばん強いので、まず排出を遅らせます。火を下げるタイミングは、延ばした発達で焦がさないための組み合わせです。' };
+      if((shortMai || longDry) && ye != null) plan.next = `その次：発達が整ったら、初期火力か投入温度を上げてイエロー（今回 ${fmt(ye)}）を30〜60秒早め、メイラードを延ばす。`;
+    } else if(over > under && over >= 2){
+      const hi = T.dtr[1], lo = Math.max(T.dtr[0], hi - 3), d1 = dropFor(lo), d2 = dropFor(hi);
+      const steps = [`排出を ${fmt(d1)}〜${fmt(d2)} にする（1ハゼから ${fmt(d1 - fc)}〜${fmt(d2 - fc)}・DTR ${lo}〜${hi}%）`];
+      if(scorch) steps.push(`1ハゼの約${lag}秒前（${heatAt}）に火を一段下げ、1ハゼに勢いよく突っ込まないようにする`);
+      steps.push('それ以外は今回と同じにする');
+      plan = { title:'次回：発達を短くする', steps, why:'苦みや発達過多のサインが強いので、排出を早めて香りを残します。' };
+    } else if(flick || stall || scorch){
+      plan = { title:'次回：1ハゼ前後の火力を整える', steps:[
+        `${lagTxt}、1ハゼの約${lag}秒前（${heatAt}）に火を一段下げる`,
+        '発達中は火を止めず、温度が毎分数℃ずつ上がり続ける程度を保つ',
+        `排出のタイミングは今回と同じ（1ハゼから ${fmt(drop - fc)}）`,
+      ], why:'配分よりも、1ハゼ前後のRoRの乱れが味に出やすい状態です。' };
+    } else if(shortMai && ye != null){
+      plan = { title:'次回：メイラードを延ばす', steps:[
+        `初期火力か投入温度を上げて、イエロー（今回 ${fmt(ye)}）を30〜60秒早める`,
+        'イエローから1ハゼまでは火力をなだらかに下げていく',
+        '1ハゼ以降は今回と同じにする',
+      ], why:'甘さと厚みを出すため、1ハゼまでの時間配分を前に寄せます。' };
+    } else if(longDry && ye != null){
+      plan = { title:'次回：前半を速くする', steps:[
+        `投入温度か初期火力を上げて、イエロー（今回 ${fmt(ye)}）を30秒ほど早める`,
+        '1ハゼ以降は今回と同じにする',
+      ], why:'前半の熱量不足を解消して、後半に余裕を作ります。' };
+    } else {
+      const steps = ['同じ条件でもう一度焙煎して、再現性を確かめる'];
+      if(wants('fruit') || wants('acid') || wants('clean')) steps.push('果実感や酸をもっと出したいなら、排出を10秒早める');
+      if(wants('sweet') || wants('body') || wants('choco')) steps.push('甘さやコクをもっと出したいなら、排出を10〜15秒遅らせる');
+      plan = { title:'次回：この配分を基準にする', steps, why:'目安から大きく外れたところはありません。変えるなら1回に1か所だけにします。' };
+    }
+  }
+  F.sort((a, b) => b.w - a.w);
+  return { T, A, F, meters, plan, prev, tl };
+}
+function meterRow(m){
+  const row = document.createElement('div'); row.className = 'mrow';
+  const name = document.createElement('span'); name.textContent = m.label;
+  const bar = document.createElement('div'); bar.className = 'mbar';
+  const pos = v => Math.max(0, Math.min(100, (v - m.min) / (m.max - m.min) * 100));
+  const band = document.createElement('i'); band.className = 'band'; band.style.left = pos(m.band[0]) + '%'; band.style.width = (pos(m.band[1]) - pos(m.band[0])) + '%';
+  const out = m.v < m.band[0] || m.v > m.band[1];
+  const dot = document.createElement('i'); dot.className = 'dot' + (out ? ' out' : ''); dot.style.left = pos(m.v) + '%';
+  bar.append(band, dot);
+  const val = document.createElement('b'); val.textContent = m.txt; if(out) val.className = 'out';
+  row.append(name, bar, val);
+  return row;
+}
+let aiBusy = false, aiAbort = null;
+function renderDiag(){
+  if(!cur) return;
+  const D = diagnose(cur), box = $('diag'); box.innerHTML = '';
+  const g = prefs.goal;
+  $('diagGoal').textContent = g.level ? `目標：${goalLine(g)}${g.machine ? '（' + lab(MACHINES, g.machine) + '）' : ''}` : '好みの焙煎が未設定のため、中浅煎りの目安で診断しています。';
+  if(D.meters.length){
+    const ms = document.createElement('div'); ms.className = 'meters';
+    D.meters.forEach(m => ms.appendChild(meterRow(m)));
+    const lg = document.createElement('small'); lg.textContent = '緑の帯が目安の範囲'; ms.appendChild(lg);
+    box.appendChild(ms);
+  }
+  if(D.plan){
+    const pl = document.createElement('div'); pl.className = 'plan';
+    const h = document.createElement('h4'); h.textContent = D.plan.title;
+    const ol = document.createElement('ol'); D.plan.steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); });
+    const p = document.createElement('p'); p.textContent = D.plan.why;
+    pl.append(h, ol, p);
+    if(D.plan.next){ const n = document.createElement('p'); n.className = 'next'; n.textContent = D.plan.next; pl.appendChild(n); }
+    box.appendChild(pl);
+  }
+  if(D.F.length){
+    const ul = document.createElement('ul'); ul.className = 'finds';
+    const ul2 = document.createElement('ul'); ul2.className = 'finds';
+    D.F.forEach((f, i) => {
+      const li = document.createElement('li'); li.className = f.lv;
+      const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = f.lv === 'warn' ? '要調整' : f.lv === 'ok' ? '良好' : 'メモ';
+      const t = document.createElement('b'); t.textContent = f.t;
+      li.append(tag, t);
+      if(f.d){ const d = document.createElement('span'); d.className = 'd'; d.textContent = f.d; li.appendChild(d); }
+      (i < 5 ? ul : ul2).appendChild(li);
+    });
+    box.appendChild(ul);
+    if(ul2.children.length){
+      const det = document.createElement('details'); det.className = 'finds-more';
+      const su = document.createElement('summary'); su.textContent = `ほかの所見（${ul2.children.length}件）`;
+      det.append(su, ul2); box.appendChild(det);
+    }
+  }
+  box.appendChild(aiBox());
+}
+function aiBox(){
+  const wrap = document.createElement('div'); wrap.className = 'ai-box';
+  const h = document.createElement('h4'); h.textContent = 'AIに詳しく聞く';
+  const out = document.createElement('div'); out.className = 'ai-out'; out.id = 'aiOut';
+  const meta = document.createElement('div'); meta.className = 'ai-meta'; meta.id = 'aiMeta';
+  if(cur.ai && cur.ai.text){ out.textContent = cur.ai.text; meta.textContent = `${dateLabel(cur.ai.at)} の回答${cur.ai.via ? '（' + cur.ai.via + '）' : ''}`; }
+  else { out.textContent = '目標・機材・この焙煎の曲線・味の記録・上の診断をまとめてAIに渡し、次回の調整を相談できます。'; out.style.color = 'var(--muted)'; }
+  const act = document.createElement('div'); act.className = 'ai-actions';
+  const ask = document.createElement('button'); ask.className = 'btn primary'; ask.id = 'aiAsk'; ask.textContent = cur.ai && cur.ai.text ? 'もう一度聞く' : 'AIに聞く';
+  const copy = document.createElement('button'); copy.className = 'btn ghost'; copy.textContent = '相談用にコピー';
+  copy.onclick = () => copyText(buildPrompt(cur), '相談用の文章', 'ClaudeなどのAIアプリに貼り付けて送ってください。');
+  ask.onclick = () => runAI(ask, out, meta);
+  act.append(ask, copy);
+  wrap.append(h, out, meta, act);
+  aiAvailable().then(kind => {
+    if(!kind){ ask.hidden = true; meta.textContent = meta.textContent || 'このアプリで直接聞くには、好み・機材の設定でAPIキーを入れてください。'; }
+  });
+  return wrap;
+}
+let _sample;
+async function capSample(){
+  if(_sample !== undefined) return _sample;
+  try{
+    _sample = window.claude && typeof window.claude.use === 'function'
+      ? await Promise.race([window.claude.use('sample'), new Promise(res => setTimeout(() => res(null), 10000))])
+      : null;
+  }catch(e){ _sample = null; }
+  return _sample;
+}
+async function aiAvailable(){
+  if(await capSample()) return 'claude';
+  if(prefs.ai && prefs.ai.key) return 'api';
+  return null;
+}
+async function callApi(prompt, onText){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{ 'content-type':'application/json', 'x-api-key':prefs.ai.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+    body:JSON.stringify({ model:prefs.ai.model || 'claude-sonnet-5-5', max_tokens:1600, messages:[{ role:'user', content:prompt }] }),
+  });
+  const j = await res.json().catch(() => null);
+  if(!res.ok){
+    const msg = j && j.error && j.error.message ? j.error.message : `HTTP ${res.status}`;
+    throw new Error(res.status === 401 ? 'APIキーが正しくないようです。設定を確認してください' : msg);
+  }
+  const text = (j && j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  onText(text);
+  return text;
+}
+async function runAI(btn, out, meta){
+  if(aiBusy){ if(aiAbort) aiAbort.abort(); return; }
+  const kind = await aiAvailable();
+  if(!kind){ toast('AIを使うにはAPIキーの設定が必要です'); return; }
+  const prompt = buildPrompt(cur), id = cur.id;
+  aiBusy = true; btn.textContent = '止める'; out.style.color = ''; out.textContent = '考えています…'; meta.textContent = '';
+  let text = '';
+  try{
+    if(kind === 'claude'){
+      const sample = await capSample();
+      aiAbort = new AbortController();
+      const r = await sample(prompt, { onText:({ text:t }) => { text = t; if(cur && cur.id === id) out.textContent = t; }, signal:aiAbort.signal, modelTier:'default', cache:false });
+      text = (r && r.text) || text;
+    } else {
+      text = await callApi(prompt, t => { if(cur && cur.id === id) out.textContent = t; });
+    }
+    if(text && cur && cur.id === id){
+      cur.ai = { text, at:new Date().toISOString(), via:kind === 'claude' ? 'Claude' : 'API' };
+      out.textContent = text; meta.textContent = `${dateLabel(cur.ai.at)} の回答（${cur.ai.via}）`;
+      queueSave();
+    }
+  }catch(e){
+    const code = e && e.code;
+    if(code === 'not_granted'){ out.textContent = 'AIの利用が許可されませんでした。「相談用にコピー」から聞くこともできます。'; }
+    else if(code === 'rate_limited'){ out.textContent = '混み合っています。少し時間をおいてもう一度押してください。'; }
+    else if(e && e.name === 'AbortError' || code === 'aborted'){ out.textContent = text || '止めました。'; }
+    else out.textContent = `うまく聞けませんでした：${(e && e.message) || e}`;
+  }finally{
+    aiBusy = false; aiAbort = null;
+    btn.textContent = cur && cur.ai && cur.ai.text ? 'もう一度聞く' : 'AIに聞く';
+  }
+}
+function buildPrompt(r){
+  const g = prefs.goal, T = goalTargets(g), D = diagnose(r), A = D.A, e = r.ev || {};
+  const L = [];
+  L.push('あなたはコーヒー自家焙煎のコーチです。以下の焙煎記録をもとに、目標の味に近づけるための次回の調整を日本語で簡潔に提案してください。');
+  L.push('条件：');
+  L.push('- 一度に変える変数は1つ、多くても2つにする');
+  L.push('- 変更は「分:秒」の時刻と火力の段階など、具体的に書く');
+  L.push('- 温度計の測り方によって、温度の絶対値は一般的な豆温度とずれることがある。時間・比率・重量減少を重視する');
+  L.push('- 推測の部分は推測と分かるように書く');
+  L.push('出力：1) 見立て（2〜3行） 2) 次回の変更（箇条書き） 3) 次の焙煎で確認すること');
+  L.push('');
+  L.push('## 目標');
+  L.push(`焙煎度：${g.level ? lab(LEVELS, g.level) : '未設定'}／出したい味：${g.flavors.map(k => lab(FLAVORS, k)).join('、') || '未設定'}／避けたい味：${g.avoid.map(k => lab(AVOIDS, k)).join('、') || '未設定'}／抽出：${lab(BREWS, g.brew) || '未設定'}`);
+  L.push(`アプリの目安：DTR ${T.dtr[0]}〜${T.dtr[1]}%、発達 ${fmt(T.dev[0])}〜${fmt(T.dev[1])}、重量減少 ${T.loss[0]}〜${T.loss[1]}%`);
+  L.push('## 機材');
+  L.push(`焙煎機：${lab(MACHINES, g.machine) || '未設定'}${r.machine || g.machineName ? '（' + (r.machine || g.machineName) + '）' : ''}／温度の測り方：${lab(PROBES, g.probe) || '未設定'}`);
+  L.push(`## 今回の焙煎：${r.bean || '豆名なし'}（${dateLabel(r.date)}）`);
+  L.push(`生豆 ${num(r.green) ? num(r.green) + 'g' : '不明'} → 焙煎後 ${num(r.roasted) ? num(r.roasted) + 'g' : '未計測'}${A.loss != null ? `（減少 ${A.loss.toFixed(1)}%）` : ''}`);
+  const evs = [];
+  if(A.chargeBT != null) evs.push(`投入 0:00 ${Math.round(A.chargeBT)}℃`);
+  if(A.tp) evs.push(`中点 ${fmt(A.tp.t)} ${Math.round(A.tp.bt)}℃`);
+  EVENTS.forEach(x => { if(e[x.k] != null){ const v = A.btAt(e[x.k]); evs.push(`${x.label} ${fmt(e[x.k])}${v != null ? ' ' + Math.round(v) + '℃' : ''}`); } });
+  L.push(`イベント：${evs.join('、') || 'なし'}`);
+  if(A.phases.length) L.push(`フェーズ：${A.phases.map(p => `${p.name} ${fmt(p.dur)}（${p.pct != null ? p.pct.toFixed(0) + '%' : '-'}・平均RoR ${p.avg != null ? p.avg.toFixed(1) : '-'}℃/分）`).join('／')}${A.dtr != null ? `／DTR ${A.dtr.toFixed(1)}%` : ''}`);
+  const end = e.drop != null ? e.drop : (A.p.length ? A.p[A.p.length - 1].t : 0), ser = [];
+  for(let t = 0; t <= end + 0.1; t += 30){ const v = A.btAt(t), rr = A.rorAt(t); if(v != null) ser.push(`${fmt(t)} ${Math.round(v)}℃${rr != null ? `(RoR ${rr.toFixed(0)})` : ''}`); }
+  if(ser.length) L.push(`温度推移（30秒ごと・補間）：${ser.join('、')}`);
+  const ops = (r.ops || []).slice().sort((a, b) => a.t - b.t);
+  if(ops.length) L.push(`火力・風量の操作：${ops.map(o => `${fmt(o.t)} ${o.type === 'heat' ? '火力' : '風量'}${o.v}`).join('、')}`);
+  if(r.note) L.push(`メモ：${r.note.replace(/\s+/g, ' ').slice(0, 400)}`);
+  const ts = (r.tastings || []).slice().sort((a, b) => a.day - b.day);
+  L.push('## 味の記録（0〜5）');
+  if(ts.length) ts.forEach(t => L.push(`${t.day}日目：${TASTE.map(x => t[x.k] != null ? `${x.label}${t[x.k]}` : '').filter(Boolean).join(' ') || '点数なし'}${t.note ? '「' + t.note.replace(/\s+/g, ' ').slice(0, 200) + '」' : ''}`));
+  else L.push('なし');
+  L.push('## アプリの自動診断');
+  D.F.filter(f => f.lv !== 'ok').slice(0, 8).forEach(f => L.push(`- ${f.t}${f.d ? '：' + f.d : ''}`));
+  if(D.plan) L.push(`アプリの提案：${D.plan.title}／${D.plan.steps.join('／')}`);
+  if(D.prev){
+    const P = analyze(D.prev), pe = D.prev.ev || {}, pt = latestTaste(D.prev);
+    L.push(`## 同じ豆の前回（${dateLabel(D.prev.date)}）`);
+    L.push(`1ハゼ ${pe.fc != null ? fmt(pe.fc) : '-'}、排出 ${pe.drop != null ? fmt(pe.drop) : '-'}、DTR ${P.dtr != null ? P.dtr.toFixed(1) + '%' : '-'}、減少 ${P.loss != null ? P.loss.toFixed(1) + '%' : '-'}${pt ? `、味（${pt.day}日目）${TASTE.map(x => pt[x.k] != null ? `${x.label}${pt[x.k]}` : '').filter(Boolean).join(' ')}` : ''}`);
+  }
+  return L.join('\n');
+}
+async function copyText(text, title, note){
+  try{ await navigator.clipboard.writeText(text); toast('コピーしました。AIアプリに貼り付けてください'); return; }catch(e){}
+  const wrap = document.createElement('div');
+  if(note){ const p = document.createElement('p'); p.textContent = note; wrap.appendChild(p); }
+  const ta = document.createElement('textarea'); ta.readOnly = true; ta.value = text; ta.style.height = '40vh'; wrap.appendChild(ta);
+  openModal({ title, node:wrap, actions:[
+    { label:'閉じる' },
+    { label:'全選択', cls:'primary', onClick: () => { ta.focus(); ta.select(); try{ document.execCommand('copy'); toast('コピーしました'); }catch(_){ toast('長押しでコピーしてください'); } return true; } },
+  ]});
+}
+
+/* ================= init ================= */
+(async () => {
+  resetInp();
+  await store.init();
+  const [rs, ps, dr, pf] = await Promise.all([store.get(KEY.roasts), store.get(KEY.profiles), store.get(KEY.draft), store.get(KEY.prefs)]);
+  prefs = Object.assign(prefs, safeParse(pf, {}));
+  ensureBlePrefs();
+  if(![30,45,60].includes(prefs.interval)) prefs.interval = 60;
+  if(typeof prefs.sound !== 'boolean') prefs.sound = true;
+  if(prefs.channels !== 'bt' && prefs.channels !== 'bt+et') prefs.channels = 'bt';
+  if(![30,60,90].includes(prefs.rorWin)) prefs.rorWin = 30;
+  if(prefs.timeMode !== 'slot') prefs.timeMode = 'free';
+  if(typeof prefs.machine !== 'string') prefs.machine = '';
+  ensureGoal();
+  roasts = safeParse(rs, []); if(!Array.isArray(roasts)) roasts = [];
+  roasts = roasts.filter(r => r && r.id && Array.isArray(r.points)).map(normRoast);
+  profiles = safeParse(ps, []); if(!Array.isArray(profiles)) profiles = [];
+  draft = safeParse(dr, null);
+  if(draft && (!draft.id || !Array.isArray(draft.points))) draft = null;
+  await migrateMiniHistory();
+  if(!prefs[PRESET_FLAG]){
+    const now = new Date().toISOString();
+    PRESETS.forEach(pr => { if(!profiles.some(x => x.id === pr.id)) profiles.push(Object.assign(clone(pr), { updated:now })); });
+    if(await persistProfiles()){
+      prefs[PRESET_FLAG] = true;
+      await savePrefs();
+    }
+  }
+  renderHome();
+  updateBleUI();
+  if(!prefs.goal.done && !prefs.goal.skipped && !draft) openOnboard(true);
+  if(isStandalone()) $('installCard').hidden = true;
+  if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+})();
+})();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing; if(!nw) return;
+        nw.addEventListener('statechange', () => {
+          if(nw.state === 'activated' && hadController){
+            const t = document.getElementById('toast'); if(t){ t.textContent = '新しいバージョンにしました。次に開いたときから反映されます'; t.hidden = false; setTimeout(() => { t.hidden = true; }, 4000); }
+          }
+        });
+      });
+    }).catch(() => {});
+  });
+}
+</script></body></html>
