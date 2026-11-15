@@ -1,5 +1,5 @@
-// YOKO Roast Log service worker — build d7797290
-const CACHE = 'roastlog-d7797290';
+// YOKO Roast Log service worker — build ea8afdc7
+const CACHE = 'roastlog-ea8afdc7';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
