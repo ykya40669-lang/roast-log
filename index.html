@@ -331,6 +331,10 @@ body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
 .device-dot.on{background:var(--ror);box-shadow:0 0 10px rgba(95,184,169,.55)}
 .device-temp{font-size:22px;font-weight:800;color:var(--copper);font-variant-numeric:tabular-nums}
 .device-note{font-size:12px;color:var(--muted);line-height:1.5;margin:0}
+.pro-list{margin:6px 0 10px;padding-left:18px;font-size:13px;line-height:1.7;color:var(--text)}
+.pro-price{font-weight:700;margin:4px 0 10px}
+.pro-lock{border:1px dashed var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px;background:var(--surface)}
+.pro-lock p{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
 .ble-fields{display:grid;gap:9px}
 .ble-fields label{display:grid;gap:4px;color:var(--muted);font-size:12px}
 .ble-fields input,.ble-fields select{width:100%;font:inherit;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
@@ -341,12 +345,16 @@ body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
 <main>
   <!-- ================= HOME ================= -->
   <section id="home" class="view">
-    <header class="home-head"><h1>YOKO Roast Log <small style="font-size:13px;color:var(--muted);font-weight:600">v9.10</small></h1></header>
+    <header class="home-head"><h1>YOKO Roast Log <small style="font-size:13px;color:var(--muted);font-weight:600">v9.11</small></h1></header>
     <p id="memNotice" class="notice" hidden></p>
     <div id="goalCard" class="card goal-card"><p id="goalTxt"></p><button id="goalBtn" class="chip-btn">好み・機材</button></div>
     <div id="installCard" class="card install-card" hidden>
       <div class="install-head"><b>ホーム画面にアプリとして追加</b><button id="installBtn" class="btn primary small">インストール</button></div>
       <p>インストール後はホーム画面・アプリ一覧から起動でき、オフラインでも焙煎ログを使えます。</p>
+    </div>
+    <div id="proCard" class="card pro-card" hidden>
+      <div class="sub-head"><b style="color:var(--text)">Pro</b><span id="proState"></span></div>
+      <div id="proBody"></div>
     </div>
     <div id="resume" class="resume" hidden>
       <p id="resumeTxt"></p>
@@ -666,6 +674,91 @@ const persistRoasts = () => store.set(KEY.roasts, JSON.stringify(roasts));
 const persistProfiles = () => store.set(KEY.profiles, JSON.stringify(profiles));
 const rorGap = () => Math.max(20, (Number(prefs.rorWin) || 30) - 5);
 const savePrefs = () => store.set(KEY.prefs, JSON.stringify(prefs));
+
+/* ================= Pro（アプリ内課金・ライセンス） ================= */
+const PRO_SKU = 'pro_unlock';
+const PRO_OPEN = true; // 移行フラグ：true の間は全員 Pro。本番公開前に false にすること
+const FREE_HISTORY = 10;
+const PRO_KEY_HASH = '7fa3f1d0d9a9bcf0be53a81cfcbb8e4bce8324ca687759e8462da567e5c1ba44';
+const isPro = () => PRO_OPEN || !!(prefs.proPlay || prefs.proLicense);
+async function sha256hex(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+async function applyLicenseKey(raw){
+  const norm = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if(!norm) return false;
+  if(await sha256hex(norm) === PRO_KEY_HASH){ prefs.proLicense = true; savePrefs(); return true; }
+  return false;
+}
+async function dgs(){
+  if(!('getDigitalGoodsService' in window)) return null;
+  try{ return await window.getDigitalGoodsService('https://play.google.com/billing'); }catch(e){ return null; }
+}
+async function refreshProFromPlay(){
+  const s = await dgs(); if(!s || typeof s.listPurchases !== 'function') return;
+  try{
+    const ps = await s.listPurchases();
+    if(ps && ps.some(p => p.itemId === PRO_SKU) && !prefs.proPlay){ prefs.proPlay = true; savePrefs(); }
+  }catch(e){}
+}
+async function buyPro(){
+  const s = await dgs();
+  if(!s){ toast('購入は Google Play 版アプリからできます'); return; }
+  try{
+    const det = await s.listItemDetails([PRO_SKU]);
+    const item = det && det.find(d => d.itemId === PRO_SKU);
+    if(!item){ toast('購入アイテムがまだ用意されていません'); return; }
+    const req = new PaymentRequest(
+      [{ supportedMethods:'https://play.google.com/billing', data:{ sku:PRO_SKU } }],
+      { total:{ label:item.title || 'YOKO Roast Log Pro', amount:{ currency:item.price.currency, value:item.price.value } } });
+    const resp = await req.show();
+    const token = resp.details && (resp.details.purchaseToken || resp.details.token);
+    if(token && typeof s.acknowledge === 'function'){ try{ await s.acknowledge(token, 'onetime'); }catch(e){} }
+    await resp.complete('success');
+    prefs.proPlay = true; savePrefs();
+    toast('Proが有効になりました'); renderHome(); if(cur) renderDiag();
+  }catch(e){ if(!e || e.name !== 'AbortError') toast('購入できませんでした'); }
+}
+function scrollToPro(){
+  if(!$('result').hidden || !$('roast').hidden){ show('home'); renderHome(); }
+  const c = $('proCard'); if(c) c.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+function proLockNote(text){
+  const d = document.createElement('div'); d.className = 'pro-lock';
+  const b = document.createElement('b'); b.textContent = 'Pro機能です';
+  const p = document.createElement('p'); p.textContent = text;
+  const btn = document.createElement('button'); btn.className = 'btn ghost small'; btn.textContent = 'Proについて';
+  btn.onclick = () => scrollToPro();
+  d.append(b, p, btn);
+  return d;
+}
+function renderProCard(){
+  const card = $('proCard'); if(!card) return; card.hidden = false;
+  const st = $('proState'), body = $('proBody'); body.innerHTML = '';
+  if(isPro()){
+    st.textContent = '有効';
+    const p = document.createElement('p'); p.className = 'device-note';
+    p.textContent = PRO_OPEN ? '現在は移行期間のため、全機能が開放されています。' : prefs.proLicense ? 'ライセンスキーで有効になっています。' : 'Google Play の購入で有効になっています。';
+    body.appendChild(p);
+    return;
+  }
+  st.textContent = '未購入';
+  const ul = document.createElement('ul'); ul.className = 'pro-list';
+  ['履歴が無制限になります', '焙煎の診断と「次回の一手」が見られます', 'AIアドバイスが使えます', 'バックアップの書き出し・読み込みができます'].forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+  const price = document.createElement('p'); price.className = 'pro-price'; price.textContent = '買い切り ¥500（税込）';
+  const buy = document.createElement('button'); buy.className = 'btn primary'; buy.style.width = '100%'; buy.textContent = 'Proを購入する';
+  buy.onclick = () => buyPro();
+  const restore = document.createElement('button'); restore.className = 'btn ghost'; restore.style.width = '100%'; restore.style.marginTop = '8px'; restore.textContent = '購入を復元する';
+  restore.onclick = async () => { await refreshProFromPlay(); renderHome(); toast(isPro() ? 'Proが有効になりました' : '購入が見つかりませんでした'); };
+  const note = document.createElement('p'); note.className = 'device-note'; note.textContent = '購入は Google Play 版アプリからできます。note 等でライセンスキーを受け取った方はこちら：';
+  const keyRow = document.createElement('div'); keyRow.className = 'row'; keyRow.style.marginTop = '8px';
+  const keyIn = document.createElement('input'); keyIn.placeholder = 'ライセンスキー'; keyIn.autocomplete = 'off'; keyIn.style.flex = '1';
+  const keyBtn = document.createElement('button'); keyBtn.className = 'btn ghost'; keyBtn.textContent = '適用';
+  keyBtn.onclick = async () => { if(await applyLicenseKey(keyIn.value)){ toast('Proが有効になりました'); renderHome(); if(cur) renderDiag(); } else toast('キーが違います'); };
+  keyRow.append(keyIn, keyBtn);
+  body.append(ul, price, buy, restore, note, keyRow);
+}
 async function saveDraft(){ if(!cur) return; draft = clone(cur); await store.set(KEY.draft, JSON.stringify(cur)); }
 function upsertRoast(r){ r.updated = new Date().toISOString(); const i = roasts.findIndex(x => x.id === r.id); if(i >= 0) roasts[i] = r; else roasts.push(r); }
 
@@ -1016,6 +1109,7 @@ document.addEventListener('visibilitychange', () => {
 const segOn = (id, v) => [...$(id).children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
 function renderHome(){
   renderGoalCard();
+  renderProCard();
   const nt = $('memNotice');
   nt.hidden = store.persistent;
   nt.textContent = 'このブラウザでは永続保存が使えないため、閉じると記録が消えます。焙煎後にバックアップを書き出してください。';
@@ -1042,7 +1136,9 @@ function renderHome(){
   };
   const ul = $('roastList'); ul.innerHTML = '';
   const sorted = roasts.slice().sort((a, b) => b.date.localeCompare(a.date));
-  sorted.forEach(r => {
+  let hiddenCount = 0;
+  sorted.forEach((r, idx) => {
+    if(!isPro() && idx >= FREE_HISTORY){ hiddenCount++; return; }
     const A = analyze(r);
     const left = [dateLabel(r.date), r.rating ? '★'.repeat(r.rating) : ''].filter(Boolean).join('　');
     const right = A.dropBT != null ? `排出 ${fmtT(A.dropBT)}℃` : A.chargeBT != null ? `投入 ${fmtT(A.chargeBT)}℃` : '';
@@ -1052,6 +1148,11 @@ function renderHome(){
     if(extra) parts.push(['i-sub full', extra]);
     ul.appendChild(mkItem(parts, () => openResult(clone(r))));
   });
+  if(hiddenCount > 0){
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'item';
+    const sp = document.createElement('span'); sp.className = 'i-sub full'; sp.textContent = `ほかに${hiddenCount}件の記録があります（Proで表示）`;
+    b.appendChild(sp); b.onclick = () => scrollToPro(); li.appendChild(b); ul.appendChild(li);
+  }
   $('roastEmpty').textContent = 'まだ記録はありません。上の「記録画面へ」から始められます。';
   $('roastEmpty').hidden = sorted.length > 0;
 
@@ -1901,12 +2002,14 @@ $('artisanBtn').onclick = () => {
     textSheet('Artisan用CSV', text, name, 'Artisanの「ファイル → インポート → Artisan CSV」で読み込めます。温度とイベントが入り、火力・風量やメモは含まれません。'));
 };
 $('backupBtn').onclick = () => {
+  if(!isPro()){ toast('バックアップは Pro 機能です'); scrollToPro(); return; }
   const text = JSON.stringify({ version:3, roasts, profiles });
   const name = `roastlog-backup-${new Date().toISOString().slice(0, 10)}.json`;
   shareFile(name, new Blob([text], { type:'application/json' }), () =>
     textSheet('バックアップ', text, name, `焙煎${roasts.length}件、ターゲット${profiles.length}件。この文字列をメモなどに保存しておけば、あとで読み込めます。`));
 };
 $('restoreBtn').onclick = () => {
+  if(!isPro()){ toast('バックアップの読み込みは Pro 機能です'); scrollToPro(); return; }
   const ta = document.createElement('textarea'); ta.placeholder = 'ここに貼り付け';
   openModal({ title:'バックアップを読み込む', text:'書き出した文字列を貼り付けてください。今ある記録は残したまま、新しいものだけ追加します。', node:ta, actions:[
     { label:'やめる' },
@@ -2386,7 +2489,7 @@ async function mergeBackup(data){
   const ok = (await persistRoasts()) && (await persistProfiles());
   return { ok, nr, np };
 }
-$('restoreFileBtn').onclick = () => $('restoreFile').click();
+$('restoreFileBtn').onclick = () => { if(!isPro()){ toast('バックアップの読み込みは Pro 機能です'); scrollToPro(); return; } $('restoreFile').click(); };
 $('restoreFile').addEventListener('change', async e => {
   const f = e.target.files && e.target.files[0]; e.target.value = '';
   if(!f) return;
@@ -2763,6 +2866,10 @@ function renderDiag(){
     const lg = document.createElement('small'); lg.textContent = '緑の帯が目安の範囲'; ms.appendChild(lg);
     box.appendChild(ms);
   }
+  if(!isPro()){
+    box.appendChild(proLockNote('焙煎の診断・次回の一手・AIアドバイスは Pro で見られます。'));
+    return;
+  }
   if(D.plan){
     const pl = document.createElement('div'); pl.className = 'plan';
     const h = document.createElement('h4'); h.textContent = D.plan.title;
@@ -3034,6 +3141,7 @@ $('profEvBtn').onclick = () => {
     }
   }
   renderHome();
+  refreshProFromPlay().then(() => { if(prefs.proPlay) renderHome(); });
   updateBleUI();
   if(!prefs.goal.done && !prefs.goal.skipped && !draft) openOnboard(true);
   if(isStandalone()) $('installCard').hidden = true;
