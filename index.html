@@ -45,6 +45,9 @@ select option{background:var(--surface);color:var(--text)}
 .sub-head{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:14px;gap:10px}
 .title-in{width:100%;font:inherit;font-size:24px;font-weight:800;border:0;border-bottom:1.5px dashed var(--line);background:transparent;padding:10px 0 6px;margin:6px 0 4px;color:var(--text)}
 .sub-note{margin:0 0 10px;color:var(--muted);font-size:13px}
+#resProf{white-space:pre-line;line-height:1.6}
+.prof-ev-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 10px}
+.prof-ev-row .sub-note{margin:0;min-width:0}
 .chart-wrap{position:relative}
 .chart-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
@@ -94,6 +97,13 @@ select option{background:var(--surface);color:var(--text)}
 #slotFill{height:100%;background:var(--faint);transform-origin:left;transform:scaleX(0)}
 .slotbar.soon #slotFill{background:var(--yellow)}
 .guide{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 10px}
+.tgt-next{display:flex;align-items:center;gap:8px;margin:0 10px;padding:5px 10px;border:1px dashed var(--line);border-radius:10px;font-size:13px;line-height:1.35;min-width:0;overflow:hidden;white-space:nowrap}
+.tgt-next>small{color:var(--muted);font-size:11px;flex:none}
+.tgt-next .it{display:inline-flex;align-items:baseline;gap:4px;min-width:0;font-variant-numeric:tabular-nums}
+.tgt-next .it b{font-weight:800}
+.tgt-next .it i{font-style:normal;color:var(--muted);font-size:12px}
+.tgt-next .it.soon b,.tgt-next .it.soon i{color:var(--hot)}
+.tgt-next .sep{color:var(--faint)}
 .g-cell{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px 10px 6px;min-width:0;line-height:1.2;white-space:nowrap;overflow:hidden}
 .g-cell.wide{grid-column:span 2}
 .g-cell small{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -331,7 +341,7 @@ body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
 <main>
   <!-- ================= HOME ================= -->
   <section id="home" class="view">
-    <header class="home-head"><h1>YOKO Roast Log <small style="font-size:13px;color:var(--muted);font-weight:600">v8</small></h1></header>
+    <header class="home-head"><h1>YOKO Roast Log <small style="font-size:13px;color:var(--muted);font-weight:600">v9</small></h1></header>
     <p id="memNotice" class="notice" hidden></p>
     <div id="goalCard" class="card goal-card"><p id="goalTxt"></p><button id="goalBtn" class="chip-btn">好み・機材</button></div>
     <div id="installCard" class="card install-card" hidden>
@@ -414,6 +424,7 @@ body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
     </div>
     <div id="slotbar" class="slotbar"><div id="slotFill"></div></div>
     <div id="guide" class="guide"></div>
+    <div id="tgtNext" class="tgt-next" hidden></div>
     <div class="chart-wrap live"><canvas id="liveChart" aria-label="温度の推移"></canvas></div>
     <div id="events" class="events"></div>
     <div class="entry">
@@ -479,7 +490,7 @@ body.lock .toast{top:calc(4px + env(safe-area-inset-top));bottom:auto}
     <header class="sub-head"><button id="profBack" class="chip-btn">戻る</button><span id="profMeta"></span></header>
     <input id="profName" class="title-in" placeholder="ターゲットの名前" autocomplete="off">
     <div class="chart-wrap prof"><canvas id="profChart" aria-label="ターゲットのグラフ"></canvas></div>
-    <p id="profEvents" class="sub-note num" hidden></p>
+    <div class="prof-ev-row"><p id="profEvents" class="sub-note num"></p><button id="profEvBtn" class="chip-btn">時刻・火力を編集</button></div>
     <div class="shift">
       <span>温度をまとめてずらす<b id="shiftSum" class="num"></b></span>
       <div id="shiftBtns" class="shift-btns"><button data-d="-5">−5</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="5">+5</button></div>
@@ -576,6 +587,7 @@ let roasts = [], profiles = [], draft = null, cur = null;
 let prefs = { interval:60, sound:true, profileId:'', channels:'bt', machine:'', rorWin:30, timeMode:'free', ble:{ service:'', characteristic:'', parser:'text', auto:false, every:2 } };
 let inp = null;
 let ticker = null, lastPre = -1, lastMark = -1, lastDrawSec = -1, audioCtx = null, wakeLock = null;
+let heatCueFired = false;
 let homeTab = 'roasts', editProf = null, profIsNew = false, profDirty = false, profShift = 0, justFinishedId = null;
 let installPromptEvent = null;
 let ble = { device:null, server:null, characteristic:null, temp:null, raw:'', connected:false, lastAutoT:-999, lastSaveMs:0 };
@@ -595,6 +607,18 @@ const elapsed = () => cur && cur.t0 ? (Date.now() - cur.t0) / 1000 : 0;
 const validTemp = v => v != null && isFinite(v) && v >= 0 && v <= 400;
 const evColor = (T, k) => k === 'drop' ? T.finish : k === 'yellow' ? T.yellow : T.crack;
 const opList = (r, k) => (r.ops || []).filter(o => o.type === k).sort((a, b) => a.t - b.t);
+const hasEv = ev => !!ev && EVENTS.some(e => ev[e.k] != null);
+function tgtFull(tg){
+  if(!tg) return null;
+  let ev = hasEv(tg.ev) ? tg.ev : null, ops = Array.isArray(tg.ops) && tg.ops.length ? tg.ops : null;
+  if(!ev || !ops){
+    const pr = (tg.pid && profiles.find(x => x.id === tg.pid)) || profiles.find(x => x.name === tg.name) || null;
+    const src = pr && pr.from ? roasts.find(x => x.id === pr.from) : null;
+    if(!ev) ev = pr && hasEv(pr.ev) ? pr.ev : src && hasEv(src.ev) ? src.ev : null;
+    if(!ops) ops = pr && Array.isArray(pr.ops) && pr.ops.length ? pr.ops : src && Array.isArray(src.ops) ? src.ops : null;
+  }
+  return Object.assign({}, tg, { ev:ev || {}, ops:ops || [] });
+}
 const opNow = (r, k) => { const l = opList(r, k); return l.length ? l[l.length - 1].v : null; };
 function dateLabel(iso){
   const d = new Date(iso), now = new Date();
@@ -717,7 +741,7 @@ function rrect(c, x, y, w, h, rad){
   c.quadraticCurveTo(x, y + h, x, y + h - rad); c.lineTo(x, y + rad); c.quadraticCurveTo(x, y, x + rad, y); c.closePath();
 }
 function drawChart(c, x0, y0, W, H, o){
-  const T = o.theme || DARK, s = o.scale || 1, r = o.roast || null, tg = o.target || null;
+  const T = o.theme || DARK, s = o.scale || 1, r = o.roast || null, tg = tgtFull(o.target || null);
   const A = r ? analyze(r) : { p:[], pe:[], ror:[], tp:null, btAt:() => null, chargeBT:null };
   const ev = r ? (r.ev || {}) : {};
   const tpts = tg ? sortPts(tg.points) : [];
@@ -730,7 +754,8 @@ function drawChart(c, x0, y0, W, H, o){
   const pad = { l:36 * s, r:28 * s, t:showPhases ? bandH + 8 * s : 8 * s, b:20 * s };
   c.save(); c.translate(x0, y0);
   if(T.bg){ c.fillStyle = T.bg; c.fillRect(0, 0, W, H); }
-  let tMax = Math.max(600, lastT(A.p), lastT(A.pe), ev.drop || 0, lastT(tpts), now || 0);
+  const tev = tg ? (tg.ev || {}) : {};
+  let tMax = Math.max(600, lastT(A.p), lastT(A.pe), ev.drop || 0, lastT(tpts), tev.drop || 0, now || 0);
   tMax = Math.ceil((tMax + 30) / 60) * 60;
   const vals = [...A.p.map(q => q.bt), ...A.pe.map(q => q.bt), ...tpts.map(q => q.bt)];
   const yMax = Math.max(240, vals.length ? Math.ceil((Math.max(...vals) + 10) / 10) * 10 : 0);
@@ -802,12 +827,33 @@ function drawChart(c, x0, y0, W, H, o){
     c.strokeStyle = T.target; c.lineWidth = 1.8 * s; c.setLineDash([6 * s, 5 * s]);
     path(tpts, q => Y(q.bt)); c.setLineDash([]);
   }
-  if(tg && tg.ev){
-    c.strokeStyle = T.target; c.lineWidth = 1.5 * s;
-    ['fc', 'drop'].forEach(k => {
-      const t = tg.ev[k], v = t != null ? tgtAt(tg, t) : null;
-      if(v == null) return;
-      c.beginPath(); c.arc(X(t), Y(v), 4 * s, 0, Math.PI * 2); c.stroke();
+  if(tg && (tg.ops || []).length){
+    /* target heat / air steps (faint, dashed) */
+    const oTop = pad.t + ph * 0.72, oBot = pad.t + ph - 3 * s;
+    const YO = v => oBot - v / 10 * (oBot - oTop);
+    const tEnd = tev.drop != null ? tev.drop : lastT(tpts);
+    OPS.forEach(op => {
+      const list = opList(tg, op.k); if(!list.length) return;
+      const col = op.k === 'heat' ? T.heat : T.air;
+      c.globalAlpha = 0.5; c.strokeStyle = col; c.lineWidth = 1.4 * s; c.setLineDash([4 * s, 4 * s]); c.beginPath();
+      list.forEach((q, i) => { const x = X(q.t); if(i === 0) c.moveTo(x, YO(q.v)); else { c.lineTo(x, YO(list[i - 1].v)); c.lineTo(x, YO(q.v)); } });
+      const lastOp = list[list.length - 1];
+      c.lineTo(Math.max(X(tEnd), X(lastOp.t)), YO(lastOp.v)); c.stroke(); c.setLineDash([]);
+      c.fillStyle = col; c.font = `600 ${fs * 0.85}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'top';
+      list.forEach(q => c.fillText(`目${op.label.slice(0, 1)}${q.v}`, X(q.t) + 2 * s, YO(q.v) + 2 * s));
+      c.globalAlpha = 1;
+    });
+  }
+  if(tg){
+    /* target event guide lines + markers on the target curve */
+    EVENTS.forEach(e => {
+      const t = tev[e.k]; if(t == null) return;
+      c.strokeStyle = T.target; c.globalAlpha = 0.55; c.lineWidth = 1 * s; c.setLineDash([2 * s, 4 * s]);
+      c.beginPath(); c.moveTo(X(t), pad.t); c.lineTo(X(t), pad.t + ph); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+      const v = tgtAt(tg, t); if(v == null) return;
+      const x = X(t), y = Y(v), d = 4.5 * s;
+      c.fillStyle = T.annBg || '#000'; c.strokeStyle = evColor(T, e.k); c.lineWidth = 1.6 * s;
+      c.beginPath(); c.moveTo(x, y - d); c.lineTo(x + d, y); c.lineTo(x, y + d); c.lineTo(x - d, y); c.closePath(); c.fill(); c.stroke();
     });
   }
   /* event guide lines */
@@ -835,6 +881,24 @@ function drawChart(c, x0, y0, W, H, o){
   }
   c.restore();
 
+  const placedAll = [];
+  if(tg && hasEv(tev)){
+    const boxH = fs + 6 * s;
+    c.font = `600 ${fs * 0.92}px ${FONT}`; c.textBaseline = 'middle'; c.textAlign = 'left';
+    EVENTS.filter(e => tev[e.k] != null).sort((a, b) => tev[a.k] - tev[b.k]).forEach(e => {
+      const t = tev[e.k], text = o.long ? `目標${e.label} ${fmt(t)}` : `${e.label} ${fmt(t)}`;
+      const w = c.measureText(text).width + 8 * s, px = X(t);
+      const bx = Math.min(Math.max(px - w / 2, pad.l), pad.l + pw - w);
+      const base = pad.t + ph * 0.72 - boxH - 4 * s; // just above the heat/air zone
+      const rows = [0, 1, 2].map(i => base - i * (boxH + 3 * s));
+      const free = cy => !placedAll.some(q => bx < q.x + q.w + 2 * s && bx + w + 2 * s > q.x && cy < q.y + q.h + 2 * s && cy + boxH + 2 * s > q.y);
+      const by = rows.find(free) ?? rows[0];
+      placedAll.push({ x:bx, y:by, w, h:boxH });
+      rrect(c, bx, by, w, boxH, 4 * s); c.fillStyle = T.annBg; c.fill();
+      c.strokeStyle = evColor(T, e.k); c.lineWidth = 1 * s; c.setLineDash([3 * s, 2 * s]); c.stroke(); c.setLineDash([]);
+      c.fillStyle = T.muted; c.fillText(text, bx + 4 * s, by + boxH / 2 + 0.5 * s);
+    });
+  }
   /* Artisan-style annotations on the BT curve */
   if(r){
     const anns = [];
@@ -845,7 +909,7 @@ function drawChart(c, x0, y0, W, H, o){
       const v = A.btAt(t);
       anns.push({ t, v, text:o.long ? `${e.label} ${fmt(t)}${v != null ? ' ' + fmtT(v) : ''}` : e.label, col:evColor(T, e.k) });
     });
-    const placed = [], boxH = fs + 6 * s;
+    const placed = placedAll, boxH = fs + 6 * s;
     c.font = `600 ${fs}px ${FONT}`; c.textBaseline = 'middle'; c.textAlign = 'left';
     anns.forEach(a => {
       const w = c.measureText(a.text).width + 8 * s;
@@ -885,7 +949,7 @@ function paint(cv, o){
 }
 const drawLive = () => { if(cur && !$('roast').hidden) paint($('liveChart'), { roast:cur, target:cur.target, now:cur.t0 ? elapsed() : null }); };
 const drawRes = () => { if(cur && !$('result').hidden) paint($('resChart'), { roast:cur, target:cur.target, long:true }); };
-const drawProf = () => { if(editProf && !$('profile').hidden) paint($('profChart'), { target:{ points:editProf.points, ev:editProf.ev } }); };
+const drawProf = () => { if(editProf && !$('profile').hidden) paint($('profChart'), { target:{ points:editProf.points, ev:editProf.ev, ops:editProf.ops || [] } }); };
 
 /* ================= views & modal ================= */
 function show(v){
@@ -935,6 +999,10 @@ function preAlert(){ vib([70, 70, 70]); if(prefs.sound){ tone(880, 0, 0.12, 0.3)
 function markAlert(){
   vib(220); if(prefs.sound) tone(1320, 0, 0.4, 0.38);
   const tm = $('timer'); tm.classList.remove('mark'); void tm.offsetWidth; tm.classList.add('mark');
+}
+function cueAlert(){
+  vib([120, 60, 120, 60, 200]);
+  if(prefs.sound){ tone(659, 0, 0.16, 0.34); tone(659, 0.24, 0.16, 0.34); tone(659, 0.48, 0.3, 0.34); }
 }
 async function keepAwake(){
   try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } }catch(e){}
@@ -1016,7 +1084,7 @@ function beginRoast(){
   const prof = profiles.find(p => p.id === $('profSel').value) || null;
   cur = normRoast({
     id:uid('r'), date:new Date().toISOString(), bean:$('beanIn').value.trim(), green:num($('greenIn').value) || num(prefs.goal && prefs.goal.batch) || null, roasted:null, note:'', rating:0, machine:($('machineIn').value.trim() || prefs.machine || ''), tastings:[],
-    target: prof ? { name:prof.name || '無題のターゲット', points:sortPts(prof.points), ev:clone(prof.ev || {}) } : null,
+    target: prof ? clone(tgtFull({ name:prof.name || '無題のターゲット', pid:prof.id, points:sortPts(prof.points), ev:clone(prof.ev || {}), ops:clone(prof.ops || []) })) : null,
     interval:prefs.interval, channels:prefs.channels, t0:null, points:[], ops:[], ev:blankEv(), undo:[],
   });
   resetInp(); show('roast'); renderRoast(); saveDraft(); keepAwake();
@@ -1176,6 +1244,7 @@ function markEvent(k){
   if(k === 'drop'){ finish(t); return; }
   cur.ev[k] = t; cur.undo.push({ type:'ev', k });
   vib(40); saveDraft(); renderRoast();
+  if(k === 'fc' && cur.ev.yellow == null) toast('イエロー（ドライエンド）が未記録です。結果画面の「イベント時刻を修正」で直せます');
 }
 async function finish(tDrop){
   cur.ev.drop = tDrop; cur.undo.push({ type:'ev', k:'drop' });
@@ -1259,7 +1328,8 @@ function renderRoast(){
 function renderGuide(A){
   if(!cur) return;
   A = A || analyze(cur);
-  const tg = cur.target, running = !!cur.t0, I = cur.interval, cells = [];
+  const tg = tgtFull(cur.target), running = !!cur.t0, I = cur.interval, cells = [];
+  renderTgtNext(tg, running);
   const cell = (label, value, unit = '', cls = '', note = '') => cells.push({ label, value, unit, cls, note });
   if(!running){
     if(tg){
@@ -1315,7 +1385,7 @@ function renderGuide(A){
 function startTicker(){
   stopTicker();
   const e = elapsed(), I = cur.interval;
-  lastMark = Math.floor(e / I); lastPre = Math.floor((e + 5) / I); lastDrawSec = -1;
+  lastMark = Math.floor(e / I); lastPre = Math.floor((e + 5) / I); lastDrawSec = -1; heatCueFired = false;
   ticker = setInterval(tick, 200); tick();
 }
 function stopTicker(){ if(ticker) clearInterval(ticker); ticker = null; }
@@ -1328,6 +1398,16 @@ function tick(){
   const pr = Math.floor((e + 5) / I), mk = Math.floor(e / I);
   if(pr > lastPre){ lastPre = pr; if(pr >= 1) preAlert(); }
   if(mk > lastMark){ lastMark = mk; if(mk >= 1) markAlert(); }
+  if(!heatCueFired && cur.ev.fc == null){
+    const tg = tgtFull(cur.target);
+    if(tg && tg.ev && tg.ev.fc != null && !(tg.ops || []).some(o => o.type === 'heat')){
+      const fcBT = tgtAt(tg, tg.ev.fc);
+      const sp = sortPts(cur.points), lp = sp.length ? sp[sp.length - 1] : null;
+      const byTime = e >= tg.ev.fc - goalTargets().lag;
+      const byBT = fcBT != null && lp && lp.bt >= fcBT - 5;
+      if(byTime || byBT){ heatCueFired = true; cueAlert(); toast('火を下げる目安です（目標の1ハゼが近づいています）'); }
+    }
+  }
   const sec = Math.floor(e);
   if(sec !== lastDrawSec){ lastDrawSec = sec; renderGuide(); if(!anyDirty() && inp.slot == null) renderEntry(); drawLive(); }
 }
@@ -1411,9 +1491,13 @@ function renderResult(){
   $('resColor').value = cur.color ?? '';
   $('resNote').value = cur.note || '';
   $('resMachine').value = cur.machine || '';
-  const warns = evOrderWarnings(cur.ev);
-  $('resWarn').hidden = !warns.length; $('resWarn').textContent = warns.length ? warns.join(' ') + '「イベント時刻を修正」で直せます。' : '';
-  $('resProf').textContent = cur.target ? `ターゲット：${cur.target.name}` : 'ターゲットなし';
+  refreshResWarn();
+  { const tgf = tgtFull(cur.target);
+    const evs = tgf ? EVENTS.filter(e => tgf.ev[e.k] != null).map(e => {
+      const a = cur.ev[e.k], t = tgf.ev[e.k];
+      return `${e.label} ${fmt(t)}${a != null ? ` → 実際 ${fmt(a)}（${a - t >= 0 ? '+' : '−'}${fmt(Math.abs(a - t))}）` : ''}`;
+    }) : [];
+    $('resProf').textContent = tgf ? `ターゲット：${tgf.name}${evs.length ? '\n' + evs.join('\n') : ''}` : 'ターゲットなし'; }
   $('backRoast').hidden = justFinishedId !== cur.id;
   $('saveState').textContent = store.persistent ? '変更はこの端末に自動保存されます' : '変更はこの画面を閉じるまで保持されます';
   const A = analyze(cur);
@@ -1480,7 +1564,7 @@ function onResInput(){
   cur.color = optNum('resColor');
   cur.note = $('resNote').value;
   cur.machine = $('resMachine').value.trim();
-  renderStats(); queueSave();
+  renderStats(); refreshResWarn(); queueSave();
   clearTimeout(diagTimer); diagTimer = setTimeout(renderDiag, 400);
 }
 ['resBean', 'resGreen', 'resRoasted', 'resMachine', 'resMoist', 'resDensity', 'resColor', 'resNote'].forEach(id => $(id).addEventListener('input', onResInput));
@@ -1513,10 +1597,10 @@ $('toProfBtn').onclick = () => {
   const d = new Date(cur.date);
   const field = document.createElement('input'); field.className = 'modal-in';
   field.value = `${cur.bean || '無題'} ${d.getMonth() + 1}/${d.getDate()}`;
-  openModal({ title:'ターゲットに登録', text:'この焙煎のBTの推移と、ハゼ・排出の時刻を次回の目標として使えるようにします。', node:field, actions:[
+  openModal({ title:'ターゲットに登録', text:'この焙煎のBTの推移、ハゼ・排出の時刻、火力・風量の操作を次回の目標として使えるようにします。', node:field, actions:[
     { label:'やめる' },
     { label:'登録する', cls:'primary', onClick: async () => {
-      const p = { id:uid('p'), name:field.value.trim() || '無題のターゲット', points:clone(pts), ev:Object.assign(blankEv(), clone(cur.ev)), from:cur.id, updated:new Date().toISOString() };
+      const p = { id:uid('p'), name:field.value.trim() || '無題のターゲット', points:clone(pts), ev:Object.assign(blankEv(), clone(cur.ev)), ops:clone(cur.ops || []), from:cur.id, updated:new Date().toISOString() };
       profiles.push(p);
       if(!await persistProfiles()){ profiles.pop(); toast('登録できませんでした'); return true; }
       prefs.profileId = p.id; savePrefs();
@@ -1538,8 +1622,7 @@ function renderProfile(){
   $('profMeta').textContent = profIsNew ? '新規（サンプル値が入っています）' : editProf.note || (editProf.from ? '焙煎記録から作成' : '手入力');
   const pev = editProf.ev || {};
   const evText = EVENTS.filter(x => pev[x.k] != null).map(x => `${x.label} ${fmt(pev[x.k])}`).join('　');
-  $('profEvents').textContent = evText ? `目標の時刻：${evText}` : '';
-  $('profEvents').hidden = !evText;
+  updateProfEvents();
   profShift = 0; $('shiftSum').textContent = '';
   $('profDel').hidden = profIsNew;
   renderProfRows(); requestAnimationFrame(drawProf);
@@ -1619,38 +1702,9 @@ function parseCsvRow(line){
   out.push(cur); return out;
 }
 function profileFromCSV(text, filename){
-  const lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()!=='');
-  let bean='';
-  for(const ln of lines){
-    if(ln.startsWith('# 豆,')){ const a=parseCsvRow(ln); bean=(a[1]||'').trim(); break; }
-  }
-  const hi=lines.findIndex(ln => /^time_sec\s*,/i.test(ln));
-  if(hi<0) throw new Error('time_sec の列が見つかりません');
-  const head=parseCsvRow(lines[hi]).map(x=>x.trim());
-  const it=head.findIndex(x=>x.toLowerCase()==='time_sec');
-  let ib=head.findIndex(x=>x.toUpperCase()==='BT');
-  if(ib<0) ib=head.findIndex(x=>x.toLowerCase()==='temp_c');
-  const ie=head.findIndex(x=>x.toLowerCase()==='event');
-  if(it<0 || ib<0) throw new Error('時間または温度列が見つかりません');
-  const pts=[], ev=blankEv();
-  const setEv=(label,t)=>{
-    const z=String(label||'').trim().toLowerCase();
-    if(!z) return;
-    if(z.includes('yellow')||z.includes('イエロー')||z.includes('dry end')) ev.yellow=t;
-    else if(z.includes('1c start')||z==='1ハゼ'||z.includes('fcs')) ev.fc=t;
-    else if(z.includes('1c end')||z.includes('1ハゼ終')||z.includes('fce')) ev.fce=t;
-    else if(z.includes('2ハゼ')||z.includes('scs')) ev.sc=t;
-    else if(z.includes('drop')||z.includes('排出')) ev.drop=t;
-  };
-  for(let i=hi+1;i<lines.length;i++){
-    const a=parseCsvRow(lines[i]); const t=parseFloat(a[it]), bt=parseFloat(a[ib]);
-    if(Number.isFinite(t) && Number.isFinite(bt)) pts.push({t,bt});
-    if(ie>=0 && Number.isFinite(t)) setEv(a[ie],t);
-  }
-  const clean=sortPts(pts);
-  if(clean.length<2) throw new Error('温度記録が2点以上必要です');
-  const base=(bean || String(filename||'CSV').replace(/\.csv$/i,'').replace(/^roast[_-]?/i,'')).trim();
-  return { id:uid('p-csv-'), name:`${base}（CSV）`, note:'CSVから読み込み', points:clean, ev, updated:new Date().toISOString() };
+  const { roast } = parseRoastLogCSV(text, filename);
+  const ev = Object.assign(blankEv(), roast.ev);
+  return { id:uid('p-csv-'), name:`${roast.bean || 'CSV'}（CSV）`, note:'CSVから読み込み', points:sortPts(roast.points).map(q => ({ t:q.t, bt:q.bt })), ev, ops:clone(roast.ops || []), updated:new Date().toISOString() };
 }
 $('importProfBtn').onclick = () => $('importProfFile').click();
 $('importProfFile').addEventListener('change', async e => {
@@ -1998,6 +2052,21 @@ function evOrderWarnings(ev){
     } else prev = { k, t };
   });
   return out;
+}
+function lossSanityWarning(r){
+  const g = num(r.green), ro = num(r.roasted);
+  if(!g || !ro) return null;
+  const loss = (g - ro) / g * 100;
+  if(loss < 10 || loss > 21) return `重量減少が ${loss.toFixed(1)}% と通常の範囲（10〜21%）を外れています。計量（風袋引き・測るタイミング）を確認してください。`;
+  return null;
+}
+function refreshResWarn(){
+  if(!cur) return;
+  const el = $('resWarn'); if(!el) return;
+  const warns = evOrderWarnings(cur.ev), lw = lossSanityWarning(cur), parts = [];
+  if(warns.length) parts.push(warns.join(' ') + '「イベント時刻を修正」で直せます。');
+  if(lw) parts.push(lw);
+  el.hidden = !parts.length; el.textContent = parts.join(' ');
 }
 function mkField(label, input){
   const l = document.createElement('label'); l.className = 'field';
@@ -2858,6 +2927,83 @@ async function copyText(text, title, note){
     { label:'全選択', cls:'primary', onClick: () => { ta.focus(); ta.select(); try{ document.execCommand('copy'); toast('コピーしました'); }catch(_){ toast('長押しでコピーしてください'); } return true; } },
   ]});
 }
+
+
+/* ---- v9: target timeline on the roast screen, target event editing ---- */
+function renderTgtNext(tg, running){
+  const box = $('tgtNext'); box.innerHTML = '';
+  if(!tg || (!hasEv(tg.ev) && !(tg.ops || []).length)){ box.hidden = true; return; }
+  box.hidden = false;
+  const items = [];
+  EVENTS.forEach(x => { const t = tg.ev[x.k]; if(t != null) items.push({ t, text:x.label }); });
+  (tg.ops || []).forEach(o => items.push({ t:o.t, text:`${o.type === 'heat' ? '火力' : '風量'}${o.v}` }));
+  if(!(tg.ops || []).some(o => o.type === 'heat') && tg.ev.fc != null){
+    const lag = goalTargets().lag; items.push({ t:Math.max(0, tg.ev.fc - lag), text:'火を下げる目安' });
+  }
+  items.sort((a, b) => a.t - b.t);
+  const lbl = document.createElement('small');
+  const add = (it, e) => {
+    if(box.children.length > 1){ const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '›'; box.appendChild(sp); }
+    const d = document.createElement('span'); d.className = 'it';
+    const b = document.createElement('b'); b.textContent = `${fmt(it.t)} ${it.text}`; d.appendChild(b);
+    if(e != null){ const left = it.t - e; const i = document.createElement('i'); i.textContent = `あと${fmt(Math.max(0, left))}`; d.appendChild(i); if(left <= 20) d.classList.add('soon'); }
+    box.appendChild(d);
+  };
+  if(!running){
+    lbl.textContent = '目標'; box.appendChild(lbl);
+    items.filter(it => EVENTS.some(x => x.label === it.text)).forEach(it => add(it, null));
+    return;
+  }
+  const e = elapsed();
+  const next = items.filter(it => it.t > e).slice(0, 2);
+  lbl.textContent = '次の目標'; box.appendChild(lbl);
+  if(!next.length){ const d = document.createElement('span'); d.className = 'it'; d.textContent = '目標の予定はすべて過ぎました'; box.appendChild(d); return; }
+  next.forEach(it => add(it, e));
+}
+function updateProfEvents(){
+  const pev = editProf.ev || {};
+  const evText = EVENTS.filter(x => pev[x.k] != null).map(x => `${x.label} ${fmt(pev[x.k])}`).join('　');
+  const opText = (editProf.ops || []).slice().sort((a, b) => a.t - b.t).map(o => `${fmt(o.t)} ${o.type === 'heat' ? '火力' : '風量'}${o.v}`).join('、');
+  $('profEvents').textContent = [evText ? `目標の時刻：${evText}` : '目標の時刻：未設定', opText ? `操作：${opText}` : ''].filter(Boolean).join('\n');
+  $('profEvents').style.whiteSpace = 'pre-line';
+}
+$('profEvBtn').onclick = () => {
+  if(!editProf) return;
+  const wrap = document.createElement('div'); wrap.className = 'edit-grid';
+  const ins = {};
+  EVENTS.forEach(e => {
+    const sp = document.createElement('span'); sp.textContent = e.label;
+    const i = mkInput('pev-' + e.k, editProf.ev && editProf.ev[e.k] != null ? fmt(editProf.ev[e.k]) : '', '空欄で未設定');
+    ins[e.k] = i; wrap.append(sp, i);
+  });
+  const opsLbl = document.createElement('span'); opsLbl.textContent = '火力・風量';
+  const opsIn = document.createElement('textarea'); opsIn.id = 'pev-ops'; opsIn.className = 'note-in';
+  opsIn.placeholder = '1行に1つ　例：\n0:00 火力5\n7:00 火力3\n8:30 風量4';
+  opsIn.value = (editProf.ops || []).slice().sort((a, b) => a.t - b.t).map(o => `${fmt(o.t)} ${o.type === 'heat' ? '火力' : '風量'}${o.v}`).join('\n');
+  wrap.append(opsLbl, opsIn);
+  openModal({ title:'目標の時刻と操作', text:'投入を0:00とした「分:秒」で入れてください。焙煎中の画面とグラフに表示されます。', node:wrap, actions:[
+    { label:'やめる' },
+    { label:'保存', cls:'primary', onClick: () => {
+      const ev = blankEv();
+      for(const e of EVENTS){
+        const v = ins[e.k].value.trim(); if(!v) continue;
+        const t = parseClock(v);
+        if(t == null || !isFinite(t) || t < 0){ toast(`${e.label}の時刻「${v}」が読めません（例 8:15）`); return true; }
+        ev[e.k] = r1(t);
+      }
+      const w = evOrderWarnings(ev); if(w.length){ toast(w[0]); return true; }
+      const ops = [];
+      for(const ln of opsIn.value.split(/\n/).map(x => x.trim()).filter(Boolean)){
+        const m = ln.match(/^(\d{1,3}[:：]\d{1,2}(?:\.\d+)?)\s*(火力|風量|火|風)\s*[=＝]?\s*(\d+(?:\.\d+)?)$/);
+        const t = m ? parseClock(m[1]) : NaN;
+        if(!m || !isFinite(t)){ toast(`「${ln}」が読めません（例 7:00 火力3）`); return true; }
+        ops.push({ t:r1(t), type:m[2].startsWith('火') ? 'heat' : 'air', v:Number(m[3]) });
+      }
+      editProf.ev = ev; editProf.ops = ops.sort((a, b) => a.t - b.t); profDirty = true;
+      updateProfEvents(); drawProf(); toast('目標の時刻を更新しました。ターゲットを保存してください');
+    }},
+  ]});
+};
 
 /* ================= init ================= */
 (async () => {
